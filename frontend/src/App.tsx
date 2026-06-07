@@ -14,8 +14,8 @@ import {
   ShieldAlert,
   Terminal,
   ChevronRight,
-  X,
-  XCircle
+  XCircle,
+  X
 } from 'lucide-react';
 import { GlassLogo } from './components/GlassLogo';
 
@@ -63,37 +63,60 @@ export default function App() {
 
   const [activeModal, setActiveModal] = useState<'whales' | 'ai' | 'bitget' | null>(null);
 
-  // Initialize Privy Web3 & Social Authentication state hooks
+  // Dynamic tracking of consecutive failures to prevent warning flicker
+  const [consecutiveFailures, setConsecutiveFailures] = useState(0);
+
   const { login, logout, authenticated, user, ready } = usePrivy();
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const healthRes = await axios.get(`${API_BASE_URL}/health`);
-        setServerHealthy(healthRes.data?.status === 'healthy');
+        const healthRes = await axios.get(`${API_BASE_URL}/health`, { timeout: 4000 });
+        const isHealthy = healthRes.data?.status === 'healthy';
+        
+        if (isHealthy) {
+          setServerHealthy(true);
+          setConsecutiveFailures(0);
+        } else {
+          handleFailure();
+        }
+      } catch {
+        handleFailure();
+      }
 
+      try {
         const signalsRes = await axios.get(`${API_BASE_URL}/signals`);
         if (signalsRes.data?.success) {
           setLiveSignals(signalsRes.data.data);
         }
+      } catch {}
 
-        try {
-          const bitgetRes = await axios.get(`${API_BASE_URL}/bitget/assets`);
-          if (bitgetRes.data?.success) {
-            setBitgetAssets(bitgetRes.data.data);
-            setBitgetError(null);
-          }
-        } catch (bErr: any) {
-          setBitgetError(bErr.response?.data?.message || 'Bitget API key configuration offline.');
+      try {
+        const bitgetRes = await axios.get(`${API_BASE_URL}/bitget/assets`);
+        if (bitgetRes.data?.success) {
+          setBitgetAssets(bitgetRes.data.data);
+          setBitgetError(null);
         }
+      } catch (bErr: any) {
+        setBitgetError(bErr.response?.data?.message || 'Bitget API key configuration offline.');
+      }
 
+      try {
         const sectorsRes = await axios.get(`${API_BASE_URL}/sectors/weights`);
         if (sectorsRes.data?.success) {
           setSectorWeights(sectorsRes.data.data);
         }
-      } catch {
-        setServerHealthy(false);
-      }
+      } catch {}
+    };
+
+    const handleFailure = () => {
+      setConsecutiveFailures(prev => {
+        const nextCount = prev + 1;
+        if (nextCount >= 3) {
+          setServerHealthy(false);
+        }
+        return nextCount;
+      });
     };
     
     fetchData();
@@ -131,7 +154,6 @@ export default function App() {
     }
   };
 
-  // Helper: Shortens user wallet address for clean navbar integration
   const formatUserIdentity = (): string => {
     if (!user) return '';
     if (user.wallet?.address) {
@@ -148,13 +170,13 @@ export default function App() {
   };
 
   return (
-    <div className="relative min-h-screen bg-[#030712] overflow-hidden pb-12">
+    <div className="relative min-h-screen bg-[#030712] pb-12">
       {/* 3D Liquid Background blobs */}
       <div className="absolute top-1/4 -left-32 w-96 h-96 bg-cyan-500/10 rounded-full blur-[100px] animate-liquid-flow pointer-events-none" />
       <div className="absolute top-2/3 -right-32 w-96 h-96 bg-indigo-500/10 rounded-full blur-[100px] animate-liquid-flow pointer-events-none animate-float-slow" />
 
       {/* FIXED STICKY GLASS HEADER */}
-      <header className="sticky top-0 z-50 bg-[#030712]/40 backdrop-blur-xl border-b border-white/5 py-4 px-6 md:px-12 flex flex-col md:flex-row items-center justify-between gap-4 mb-8">
+      <header className="sticky top-0 z-50 bg-[#030712]/50 backdrop-blur-xl border-b border-white/10 py-4 px-6 md:px-12 flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <GlassLogo />
           <div>
@@ -173,7 +195,9 @@ export default function App() {
             <RefreshCw className={`w-3.5 h-3.5 text-cyan-400 ${serverHealthy ? 'animate-spin' : ''}`} />
             <span className={`w-2 h-2 rounded-full ${serverHealthy ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`} />
             <span className="text-gray-400">Node Gateway:</span>
-            <span className="font-semibold text-gray-200">{serverHealthy ? 'CONNECTED' : 'STANDBY'}</span>
+            <span className="font-semibold text-gray-200">
+              {serverHealthy ? 'CONNECTED' : `STANDBY (${consecutiveFailures} drops)`}
+            </span>
           </div>
 
           <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-full border border-white/5">
@@ -213,8 +237,8 @@ export default function App() {
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 z-10">
 
         {/* WELCOME HERO CARD */}
-        <div className="glass-card rounded-3xl p-6 mb-8 relative overflow-hidden border border-cyan-500/20 shadow-[0_0_50px_rgba(6,182,212,0.15)] animate-float-medium">
-          <div className="absolute top-0 right-0 w-48 h-48 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="glass-card rounded-3xl p-6 mb-8 relative overflow-hidden border border-white/12 shadow-[0_0_50px_rgba(255,255,255,0.03)] animate-float-medium">
+          <div className="absolute top-0 right-0 w-48 h-48 bg-cyan-500/5 rounded-full blur-3xl pointer-events-none" />
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="space-y-2">
               <span className="text-xs font-bold text-cyan-400 bg-cyan-500/10 px-3 py-1 rounded-full border border-cyan-500/20 uppercase tracking-widest">
@@ -250,7 +274,7 @@ export default function App() {
         </div>
 
         {/* Warning Banner */}
-        {!serverHealthy && (
+        {!serverHealthy && serverHealthy !== null && (
           <div className="mb-8 p-4 bg-rose-500/10 border border-rose-500/20 rounded-2xl flex items-center gap-3 text-sm text-rose-300">
             <ShieldAlert className="w-5 h-5 text-rose-400 flex-shrink-0" />
             <span>Backend API Node is currently in Standby. Start your local server to scan live blocks.</span>
@@ -261,7 +285,7 @@ export default function App() {
         <section className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <div 
             onClick={() => setActiveModal('whales')}
-            className="glass-card rounded-3xl p-6 relative overflow-hidden group cursor-pointer border hover:border-cyan-500/30"
+            className="bg-slate-950/45 backdrop-blur-xl rounded-3xl p-6 relative overflow-hidden group cursor-pointer border border-white/12 hover:border-cyan-500/30"
           >
             <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
             <div className="flex items-center justify-between mb-4">
@@ -278,7 +302,7 @@ export default function App() {
 
           <div 
             onClick={() => setActiveModal('ai')}
-            className="glass-card rounded-3xl p-6 relative overflow-hidden group cursor-pointer border hover:border-indigo-500/30"
+            className="bg-slate-950/45 backdrop-blur-xl rounded-3xl p-6 relative overflow-hidden group cursor-pointer border border-white/12 hover:border-indigo-500/30"
           >
             <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
             <div className="flex items-center justify-between mb-4">
@@ -295,7 +319,7 @@ export default function App() {
 
           <div 
             onClick={() => setActiveModal('bitget')}
-            className="glass-card rounded-3xl p-6 relative overflow-hidden group cursor-pointer border hover:border-blue-500/30"
+            className="bg-slate-950/45 backdrop-blur-xl rounded-3xl p-6 relative overflow-hidden group cursor-pointer border border-white/12 hover:border-blue-500/30"
           >
             <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
             <div className="flex items-center justify-between mb-4">
@@ -339,14 +363,14 @@ export default function App() {
             {activeTab === 'signals' && (
               <div className="max-h-[620px] overflow-y-auto pr-2 space-y-4">
                 {liveSignals.length === 0 ? (
-                  <div className="glass-card rounded-3xl p-8 text-center text-gray-400">
+                  <div className="bg-slate-950/45 backdrop-blur-xl rounded-3xl p-8 text-center text-gray-400 border border-white/12">
                     <Activity className="w-8 h-8 mx-auto mb-3 text-cyan-400 animate-pulse" />
                     <p className="text-sm font-medium">Listening to live Ethereum blocks...</p>
                     <p className="text-xs text-gray-500 mt-1">Real-time smart money transactions appear here as they are broadcasted on-chain.</p>
                   </div>
                 ) : (
                   liveSignals.map((signal, idx) => (
-                    <div key={idx} className="glass-card rounded-3xl p-6 flex flex-col md:flex-row gap-4 justify-between relative overflow-hidden animate-float-slow">
+                    <div key={idx} className="bg-slate-950/45 backdrop-blur-xl rounded-3xl p-6 flex flex-col md:flex-row gap-4 justify-between relative overflow-hidden border border-white/12">
                       <div className="space-y-3">
                         <div className="flex flex-wrap items-center gap-2.5">
                           <span className="text-sm font-bold text-white">{signal.walletLabel}</span>
@@ -398,7 +422,7 @@ export default function App() {
 
             {/* TAB CONTENT: Intelligence / Sector Rotations */}
             {activeTab === 'intelligence' && (
-              <div className="glass-card rounded-3xl p-6 space-y-6">
+              <div className="bg-slate-950/45 backdrop-blur-xl rounded-3xl p-6 space-y-6 border border-white/12">
                 <div>
                   <h3 className="text-lg font-bold text-white mb-2">Crypto Sector Accumulation Weight</h3>
                   <p className="text-sm text-gray-400">Calculated dynamic weighting of capital rotation entering target crypto categories over a 7-day period.</p>
@@ -435,7 +459,7 @@ export default function App() {
             
             {/* ROTATING LIQUID GLOWING BORDER AROUND ACTIVE CARD */}
             <div className="relative p-[1px] rounded-3xl overflow-hidden bg-gradient-to-r from-cyan-500 via-indigo-500 to-blue-500 animate-pulse">
-              <div className="bg-[#030712]/95 backdrop-blur-xl rounded-[23px] p-6 space-y-4">
+              <div className="bg-slate-950/95 backdrop-blur-xl rounded-[23px] p-6 space-y-4">
                 <div className="flex items-center gap-3">
                   <span className="p-2 bg-cyan-500/10 rounded-xl text-cyan-400 border border-cyan-500/20">
                     <Terminal className="w-5 h-5" />
@@ -503,7 +527,7 @@ export default function App() {
             </div>
 
             {/* Bitget Asset Summary Widget */}
-            <div className="glass-card rounded-3xl p-6 space-y-4">
+            <div className="bg-slate-950/45 backdrop-blur-xl rounded-3xl p-6 space-y-4 border border-white/12">
               <div className="flex items-center gap-3">
                 <span className="p-2 bg-blue-500/10 rounded-xl text-blue-400 border border-blue-500/20">
                   <Wallet className="w-5 h-5" />
