@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
+import { usePrivy } from '@privy-io/react-auth';
 import { 
   Activity, 
   TrendingUp, 
@@ -13,7 +14,8 @@ import {
   ShieldAlert,
   Terminal,
   ChevronRight,
-  X
+  X,
+  XCircle
 } from 'lucide-react';
 import { GlassLogo } from './components/GlassLogo';
 
@@ -60,6 +62,9 @@ export default function App() {
   const [bitgetError, setBitgetError] = useState<string | null>(null);
 
   const [activeModal, setActiveModal] = useState<'whales' | 'ai' | 'bitget' | null>(null);
+
+  // Initialize Privy Web3 & Social Authentication state hooks
+  const { login, logout, authenticated, user, ready } = usePrivy();
 
   useEffect(() => {
     const fetchData = async () => {
@@ -126,6 +131,22 @@ export default function App() {
     }
   };
 
+  // Helper: Shortens user wallet address for clean navbar integration
+  const formatUserIdentity = (): string => {
+    if (!user) return '';
+    if (user.wallet?.address) {
+      const addr = user.wallet.address;
+      return `${addr.substring(0, 6)}...${addr.substring(38)}`;
+    }
+    if (user.google?.email) {
+      return user.google.email;
+    }
+    if (user.email?.address) {
+      return user.email.address;
+    }
+    return 'Authenticated User';
+  };
+
   return (
     <div className="relative min-h-screen bg-[#030712] overflow-hidden pb-12">
       {/* 3D Liquid Background blobs */}
@@ -146,6 +167,7 @@ export default function App() {
           </div>
         </div>
 
+        {/* Global Connection Controls */}
         <div className="flex flex-wrap items-center gap-4 text-xs">
           <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-full border border-white/5">
             <RefreshCw className={`w-3.5 h-3.5 text-cyan-400 ${serverHealthy ? 'animate-spin' : ''}`} />
@@ -159,6 +181,31 @@ export default function App() {
             <span className="text-gray-400">Tracked Wallets:</span>
             <span className="font-semibold text-cyan-400">6 Addresses</span>
           </div>
+
+          {/* Privy Authentication Panel */}
+          {ready && (
+            <div className="flex items-center gap-2">
+              {authenticated ? (
+                <div className="flex items-center gap-2 bg-cyan-500/10 px-3 py-1.5 rounded-full border border-cyan-500/20 text-cyan-300 font-mono">
+                  <span>{formatUserIdentity()}</span>
+                  <button 
+                    onClick={logout}
+                    className="p-1 bg-white/5 hover:bg-white/10 rounded-full text-cyan-400 hover:text-rose-400 transition-colors cursor-pointer"
+                    title="Disconnect Session"
+                  >
+                    <XCircle className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <button 
+                  onClick={login}
+                  className="px-4 py-1.5 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white font-semibold rounded-full shadow-lg shadow-cyan-500/15 cursor-pointer transition-all"
+                >
+                  Sign In
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </header>
 
@@ -190,12 +237,14 @@ export default function App() {
                 <Compass className="w-4 h-4" />
                 Launch Telegram Bot
               </a>
-              <button 
-                onClick={() => alert('Privy Integration initialized. Authenticating OAuth...')}
-                className="px-6 py-2.5 bg-white/5 hover:bg-white/10 text-gray-200 text-xs font-bold rounded-2xl border border-white/10 hover:border-white/20 transition-all cursor-pointer"
-              >
-                Connect Wallet (Privy)
-              </button>
+              {ready && (
+                <button 
+                  onClick={authenticated ? logout : login}
+                  className="px-6 py-2.5 bg-white/5 hover:bg-white/10 text-gray-200 text-xs font-bold rounded-2xl border border-white/10 hover:border-white/20 transition-all cursor-pointer"
+                >
+                  {authenticated ? 'Disconnect Wallet' : 'Connect Wallet (Privy)'}
+                </button>
+              )}
             </div>
           </div>
         </div>
