@@ -1,0 +1,22 @@
+# Dependencies (Never commit node_modules)
+node_modules/
+backend/node_modules/
+frontend/node_modules/
+
+# Production Builds
+dist/
+backend/dist/
+frontend/dist/
+build/
+
+# Local Environment Variables & Secrets (Critical Security)
+.env
+backend/.env
+frontend/.env
+.env.local
+.env.production
+
+# System Files
+.DS_Store
+Thumbs.db
+*.log
