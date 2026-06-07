@@ -5,13 +5,22 @@ import { LiveTransaction, SmartMoneySignal, TrackedWallet } from '../types/index
 
 export class BlockchainTrackerService {
   private static provider: ethers.JsonRpcProvider | null = null;
+  private static wsProvider: ethers.WebSocketProvider | null = null;
   private static activeTracking = false;
+  private static isUsingWebSocket = false;
 
+  // Resilient public HTTPS RPC nodes
   private static readonly FALLBACK_RPCS = [
     'https://cloudflare-eth.com',
     'https://ethereum-rpc.publicnode.com',
     'https://eth.llamarpc.com',
     'https://rpc.ankr.com/eth'
+  ];
+
+  // Resilient public WebSocket RPC nodes
+  private static readonly FALLBACK_WSS = [
+    'wss://ethereum-rpc.publicnode.com',
+    'wss://eth.llamarpc.com'
   ];
 
   public static readonly WATCHED_WALLETS: TrackedWallet[] = [
@@ -24,7 +33,7 @@ export class BlockchainTrackerService {
   ];
 
   /**
-   * Public: Resolves the active node, automatically rotating through fallbacks on network dropouts
+   * Resolves the active JSON-RPC HTTP provider
    */
   public static async getProvider(): Promise<ethers.JsonRpcProvider> {
     if (this.provider) return this.provider;
@@ -33,10 +42,10 @@ export class BlockchainTrackerService {
       const primaryProvider = new ethers.JsonRpcProvider(config.ETH_MAINNET_RPC, undefined, { staticNetwork: true });
       await primaryProvider.getNetwork();
       this.provider = primaryProvider;
-      console.log(`[Tracker] Connected to Primary Node: ${config.ETH_MAINNET_RPC}`);
+      console.log(`[Tracker] Connected to Primary HTTP Node: ${config.ETH_MAINNET_RPC}`);
       return this.provider;
     } catch {
-      // Primary offline or unauthorized, proceeding to fallbacks
+      // Primary offline, routing to fallbacks
     }
 
     for (const rpc of this.FALLBACK_RPCS) {
@@ -44,16 +53,19 @@ export class BlockchainTrackerService {
         const testProvider = new ethers.JsonRpcProvider(rpc, undefined, { staticNetwork: true });
         await testProvider.getNetwork();
         this.provider = testProvider;
-        console.log(`[Tracker] Connected to Fallback Node: ${rpc}`);
+        console.log(`[Tracker] Connected to Fallback HTTP Node: ${rpc}`);
         return this.provider;
       } catch {
         continue;
       }
     }
 
-    throw new Error('[Tracker] Critical Node Failure: All public Ethereum gateways are unreachable.');
+    throw new Error('[Tracker] Critical Node Failure: All public HTTP RPC gateways are unreachable.');
   }
 
+  /**
+   * Translates transaction variables into semantic signals via Qwen model Studio
+   */
   private static async runAIEvaluation(
     tx: LiveTransaction,
     wallet: TrackedWallet
@@ -95,12 +107,15 @@ Evaluate the historical importance of this movement, calculate expected impact s
     }
   }
 
+  /**
+   * Scans a specific block for tracked wallet events
+   */
   public static async scanBlock(blockNumber: number): Promise<SmartMoneySignal[]> {
     const signals: SmartMoneySignal[] = [];
 
     try {
-      const provider = await this.getProvider();
-      const block = await provider.getBlock(blockNumber, true);
+      const activeProvider = this.isUsingWebSocket && this.wsProvider ? this.wsProvider : await this.getProvider();
+      const block = await activeProvider.getBlock(blockNumber, true);
       if (!block || !block.prefetchedTransactions) return [];
 
       for (const tx of block.prefetchedTransactions) {
@@ -146,31 +161,84 @@ Evaluate the historical importance of this movement, calculate expected impact s
           });
         }
       }
-    } catch (error: any) {
-      // Absorb tracking logs
+    } catch {
+      // Absorb scan errors
     }
 
     return signals;
   }
 
-  public static async startLiveScanner(callback: (signals: SmartMoneySignal[]) => void): Promise<void> {
-    if (this.activeTracking) return;
-    this.activeTracking = true;
-
+  /**
+   * Initializes standard, resilient HTTP JSON-RPC polling (Fallback Path)
+   */
+  private static async startHttpFallback(callback: (signals: SmartMoneySignal[]) => void): Promise<void> {
     try {
+      this.isUsingWebSocket = false;
       const provider = await this.getProvider();
-      console.log('[Tracker] Live Block Scanner Online. Listening to resilient mainnet block nodes...');
+      console.log('[Tracker] HTTP JSON-RPC fallback poller initialized and scanning blocks...');
 
       provider.on('block', async (blockNumber: number) => {
         try {
           const signals = await this.scanBlock(blockNumber);
-          if (signals.length > 0) {
-            callback(signals);
-          }
+          if (signals.length > 0) callback(signals);
         } catch {}
       });
     } catch (err: any) {
-      console.warn('[Tracker Warning] Live polling paused: ', err.message);
+      console.error('[Tracker] Critical initialization failure on HTTP Fallback:', err.message);
     }
+  }
+
+  /**
+   * Main Entry: Boots sub-second WebSocket listeners, with automatic graceful HTTP failover
+   */
+  public static async startLiveScanner(callback: (signals: SmartMoneySignal[]) => void): Promise<void> {
+    if (this.activeTracking) return;
+    this.activeTracking = true;
+
+    // Try primary WebSocket connection routes
+    for (const wss of this.FALLBACK_WSS) {
+      try {
+        console.log(`[Tracker] Attempting WebSocket handshake at: ${wss}`);
+        const wsNode = new ethers.WebSocketProvider(wss);
+        await wsNode.getNetwork(); // Verify connection handshake
+
+        this.wsProvider = wsNode;
+        this.isUsingWebSocket = true;
+        console.log(`[Tracker] WebSocket connection verified. Listening to live blocks via: ${wss}`);
+
+        // Register block listeners on the WebSocket connection
+        this.wsProvider.on('block', async (blockNumber: number) => {
+          try {
+            const signals = await this.scanBlock(blockNumber);
+            if (signals.length > 0) callback(signals);
+          } catch {}
+        });
+
+        // Register close/error handlers to automatically failover to HTTP polling on socket drops
+        const websocketConnection = (this.wsProvider.websocket as any);
+        if (websocketConnection) {
+          websocketConnection.addEventListener('close', () => {
+            console.warn('[Tracker WebSocket Warning] Connection closed by peer. Activating HTTP fallback polling...');
+            this.wsProvider?.destroy();
+            this.startHttpFallback(callback);
+          });
+
+          websocketConnection.addEventListener('error', (err: any) => {
+            console.warn('[Tracker WebSocket Error] Socket encountered error:', err.message || err);
+            this.wsProvider?.destroy();
+            this.startHttpFallback(callback);
+          });
+        }
+
+        return; // Success, exit initialization loop
+      } catch (err: any) {
+        console.warn(`[Tracker WebSocket Warning] Handshake failed at ${wss}. Error: ${err.message}`);
+        continue;
+      }
+    }
+
+    // Failover to pure HTTP block-polling loops if all WebSocket gateways reject handshakes
+    console.warn('[Tracker Node Warning] All WebSocket gateways are unreachable. Initiating HTTP polling...');
+    await this.startHttpFallback(callback);
   }
 }

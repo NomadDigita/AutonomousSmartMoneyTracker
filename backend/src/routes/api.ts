@@ -6,14 +6,10 @@ import { QwenService } from '../services/qwen.js';
 
 const router = Router();
 
-// In-Memory map to track rate limits per IP address
 const ipRequestsMap: Record<string, { count: number; resetTime: number }> = {};
-const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute window
-const MAX_REQUESTS_PER_WINDOW = 60; // Max 60 requests per minute
+const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const MAX_REQUESTS_PER_WINDOW = 60;
 
-/**
- * Native Express Rate Limiter Middleware
- */
 const rateLimiter = (req: Request, res: Response, next: NextFunction) => {
   const ip = req.ip || req.socket.remoteAddress || 'unknown-ip';
   const now = Date.now();
@@ -29,7 +25,6 @@ const rateLimiter = (req: Request, res: Response, next: NextFunction) => {
   const record = ipRequestsMap[ip];
 
   if (now > record.resetTime) {
-    // Reset window
     record.count = 1;
     record.resetTime = now + RATE_LIMIT_WINDOW_MS;
     return next();
@@ -47,15 +42,23 @@ const rateLimiter = (req: Request, res: Response, next: NextFunction) => {
   next();
 };
 
-// Apply native rate limiting middleware to all active routes
 router.use(rateLimiter);
 
-router.get('/signals', (req: Request, res: Response) => {
-  res.status(200).json({
-    success: true,
-    count: SignalStateManager.getSignals().length,
-    data: SignalStateManager.getSignals()
-  });
+// Refactored to fetch live PostgreSQL histories asynchronously
+router.get('/signals', async (req: Request, res: Response) => {
+  try {
+    const signals = await SignalStateManager.getSignals();
+    res.status(200).json({
+      success: true,
+      count: signals.length,
+      data: signals
+    });
+  } catch (err: any) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve persistent signals.'
+    });
+  }
 });
 
 router.get('/bitget/assets', async (req: Request, res: Response) => {

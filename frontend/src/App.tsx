@@ -31,7 +31,7 @@ interface TransactionAlert {
 }
 
 interface BitgetAsset {
-  coin: string; // Fixed type declaration matching api
+  coin: string;
   available: string;
   frozen: string;
   locked: string;
@@ -41,6 +41,11 @@ interface SectorWeight {
   name: string;
   weight: number;
 }
+
+// Automatically resolves the active backend API URL depending on Vercel deployment env variables or node production state
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD 
+  ? 'https://autonomous-smart-money-tracker.onrender.com' 
+  : 'http://localhost:5000');
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'signals' | 'intelligence' | 'trading'>('signals');
@@ -57,16 +62,16 @@ export default function App() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const healthRes = await axios.get('http://localhost:5000/health');
+        const healthRes = await axios.get(`${API_BASE_URL}/health`);
         setServerHealthy(healthRes.data?.status === 'healthy');
 
-        const signalsRes = await axios.get('http://localhost:5000/signals');
+        const signalsRes = await axios.get(`${API_BASE_URL}/signals`);
         if (signalsRes.data?.success) {
           setLiveSignals(signalsRes.data.data);
         }
 
         try {
-          const bitgetRes = await axios.get('http://localhost:5000/bitget/assets');
+          const bitgetRes = await axios.get(`${API_BASE_URL}/bitget/assets`);
           if (bitgetRes.data?.success) {
             setBitgetAssets(bitgetRes.data.data);
             setBitgetError(null);
@@ -75,7 +80,7 @@ export default function App() {
           setBitgetError(bErr.response?.data?.message || 'Bitget API key configuration offline.');
         }
 
-        const sectorsRes = await axios.get('http://localhost:5000/sectors/weights');
+        const sectorsRes = await axios.get(`${API_BASE_URL}/sectors/weights`);
         if (sectorsRes.data?.success) {
           setSectorWeights(sectorsRes.data.data);
         }

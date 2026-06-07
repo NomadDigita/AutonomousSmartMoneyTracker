@@ -19,6 +19,8 @@ interface Config {
   QWEN_API_KEY: string;
   ETH_MAINNET_RPC: string;
   SOLANA_MAINNET_RPC: string;
+  SUPABASE_URL: string;
+  SUPABASE_KEY: string;
 }
 
 const requiredEnv = [
@@ -28,7 +30,9 @@ const requiredEnv = [
   'BITGET_PASSPHRASE',
   'MULERUN_API_KEY',
   'TAVILY_API_KEY',
-  'QWEN_API_KEY'
+  'QWEN_API_KEY',
+  'SUPABASE_URL',
+  'SUPABASE_KEY'
 ];
 
 for (const key of requiredEnv) {
@@ -37,7 +41,6 @@ for (const key of requiredEnv) {
   }
 }
 
-// Automatically sanitizes and trims hidden carriage returns (\r) or spaces from Windows environments
 const sanitize = (val: string | undefined): string => {
   if (!val) return '';
   return val.replace(/[\r\n]/g, '').trim();
@@ -54,5 +57,7 @@ export const config: Config = {
   TAVILY_API_KEY: sanitize(process.env.TAVILY_API_KEY),
   QWEN_API_KEY: sanitize(process.env.QWEN_API_KEY),
   ETH_MAINNET_RPC: sanitize(process.env.ETH_MAINNET_RPC) || 'https://cloudflare-eth.com',
-  SOLANA_MAINNET_RPC: sanitize(process.env.SOLANA_MAINNET_RPC) || 'https://api.mainnet-beta.solana.com'
+  SOLANA_MAINNET_RPC: sanitize(process.env.SOLANA_MAINNET_RPC) || 'https://api.mainnet-beta.solana.com',
+  SUPABASE_URL: sanitize(process.env.SUPABASE_URL),
+  SUPABASE_KEY: sanitize(process.env.SUPABASE_KEY)
 };
