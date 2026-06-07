@@ -12,7 +12,8 @@ import {
   ArrowUpRight, 
   ShieldAlert,
   Terminal,
-  ChevronRight
+  ChevronRight,
+  X
 } from 'lucide-react';
 import { GlassLogo } from './components/GlassLogo';
 
@@ -42,7 +43,6 @@ interface SectorWeight {
   weight: number;
 }
 
-// Automatically resolves the active backend API URL depending on Vercel deployment env variables or node production state
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD 
   ? 'https://autonomous-smart-money-tracker.onrender.com' 
   : 'http://localhost:5000');
@@ -58,6 +58,8 @@ export default function App() {
   const [bitgetAssets, setBitgetAssets] = useState<BitgetAsset[]>([]);
   const [sectorWeights, setSectorWeights] = useState<SectorWeight[]>([]);
   const [bitgetError, setBitgetError] = useState<string | null>(null);
+
+  const [activeModal, setActiveModal] = useState<'whales' | 'ai' | 'bitget' | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -125,44 +127,78 @@ export default function App() {
   };
 
   return (
-    <div className="relative min-h-screen bg-[#030712] overflow-hidden">
+    <div className="relative min-h-screen bg-[#030712] overflow-hidden pb-12">
       {/* 3D Liquid Background blobs */}
       <div className="absolute top-1/4 -left-32 w-96 h-96 bg-cyan-500/10 rounded-full blur-[100px] animate-liquid-flow pointer-events-none" />
       <div className="absolute top-2/3 -right-32 w-96 h-96 bg-indigo-500/10 rounded-full blur-[100px] animate-liquid-flow pointer-events-none animate-float-slow" />
 
+      {/* FIXED STICKY GLASS HEADER */}
+      <header className="sticky top-0 z-50 bg-[#030712]/40 backdrop-blur-xl border-b border-white/5 py-4 px-6 md:px-12 flex flex-col md:flex-row items-center justify-between gap-4 mb-8">
+        <div className="flex items-center gap-4">
+          <GlassLogo />
+          <div>
+            <h1 className="text-xl font-bold bg-gradient-to-r from-white via-cyan-200 to-cyan-400 bg-clip-text text-transparent tracking-tight">
+              SMARTFLOW AI
+            </h1>
+            <p className="text-xs text-cyan-400/80 tracking-widest font-medium uppercase">
+              Autonomous On-Chain Intelligence
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-4 text-xs">
+          <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-full border border-white/5">
+            <RefreshCw className={`w-3.5 h-3.5 text-cyan-400 ${serverHealthy ? 'animate-spin' : ''}`} />
+            <span className={`w-2 h-2 rounded-full ${serverHealthy ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`} />
+            <span className="text-gray-400">Node Gateway:</span>
+            <span className="font-semibold text-gray-200">{serverHealthy ? 'CONNECTED' : 'STANDBY'}</span>
+          </div>
+
+          <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-full border border-white/5">
+            <Compass className="w-3.5 h-3.5 text-cyan-400" />
+            <span className="text-gray-400">Tracked Wallets:</span>
+            <span className="font-semibold text-cyan-400">6 Addresses</span>
+          </div>
+        </div>
+      </header>
+
       {/* Main Container */}
-      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 z-10">
-        
-        {/* Header Section */}
-        <header className="glass-card rounded-3xl p-4 flex flex-col md:flex-row items-center justify-between mb-8 gap-4">
-          <div className="flex items-center gap-4">
-            <GlassLogo />
-            <div>
-              <h1 className="text-xl font-bold bg-gradient-to-r from-white via-cyan-200 to-cyan-400 bg-clip-text text-transparent tracking-tight">
-                SMARTFLOW AI
-              </h1>
-              <p className="text-xs text-cyan-400/80 tracking-widest font-medium uppercase">
-                Autonomous On-Chain Intelligence
+      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 z-10">
+
+        {/* WELCOME HERO CARD */}
+        <div className="glass-card rounded-3xl p-6 mb-8 relative overflow-hidden border border-cyan-500/20 shadow-[0_0_50px_rgba(6,182,212,0.15)] animate-float-medium">
+          <div className="absolute top-0 right-0 w-48 h-48 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
+          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="space-y-2">
+              <span className="text-xs font-bold text-cyan-400 bg-cyan-500/10 px-3 py-1 rounded-full border border-cyan-500/20 uppercase tracking-widest">
+                System Active
+              </span>
+              <h2 className="text-2xl font-bold text-white tracking-tight">
+                Institutional-Grade Smart Money Intelligence
+              </h2>
+              <p className="text-sm text-gray-400 max-w-2xl leading-relaxed">
+                Track elite Ethereum wallets in real-time, analyze sector inflows via Aliyun Qwen, and execute trades on Bitget. Connect your wallet or visit our custom Telegram bot.
               </p>
             </div>
-          </div>
-
-          {/* Diagnostic indicators */}
-          <div className="flex flex-wrap items-center gap-4 text-xs">
-            <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-full border border-white/5">
-              <RefreshCw className={`w-3.5 h-3.5 text-cyan-400 ${serverHealthy ? 'animate-spin' : ''}`} />
-              <span className={`w-2 h-2 rounded-full ${serverHealthy ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`} />
-              <span className="text-gray-400">Node Gateway:</span>
-              <span className="font-semibold text-gray-200">{serverHealthy ? 'CONNECTED' : 'STANDBY'}</span>
+            <div className="flex flex-wrap gap-3">
+              <a 
+                href="https://t.me/Smart_FlowAIBot" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="px-6 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white text-xs font-bold rounded-2xl shadow-lg shadow-cyan-500/25 transition-all transform hover:-translate-y-0.5 flex items-center gap-2"
+              >
+                <Compass className="w-4 h-4" />
+                Launch Telegram Bot
+              </a>
+              <button 
+                onClick={() => alert('Privy Integration initialized. Authenticating OAuth...')}
+                className="px-6 py-2.5 bg-white/5 hover:bg-white/10 text-gray-200 text-xs font-bold rounded-2xl border border-white/10 hover:border-white/20 transition-all cursor-pointer"
+              >
+                Connect Wallet (Privy)
+              </button>
             </div>
-
-            <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-full border border-white/5">
-              <Compass className="w-3.5 h-3.5 text-cyan-400" />
-              <span className="text-gray-400">Tracked Wallets:</span>
-              <span className="font-semibold text-cyan-400">6 Addresses</span>
-            </div>
           </div>
-        </header>
+        </div>
 
         {/* Warning Banner */}
         {!serverHealthy && (
@@ -172,44 +208,53 @@ export default function App() {
           </div>
         )}
 
-        {/* Info banners */}
+        {/* Clickable Info Banners */}
         <section className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="glass-card rounded-3xl p-6 relative overflow-hidden group">
+          <div 
+            onClick={() => setActiveModal('whales')}
+            className="glass-card rounded-3xl p-6 relative overflow-hidden group cursor-pointer border hover:border-cyan-500/30"
+          >
             <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
             <div className="flex items-center justify-between mb-4">
               <span className="p-3 bg-cyan-500/10 rounded-2xl text-cyan-400 border border-cyan-500/20">
                 <Activity className="w-6 h-6" />
               </span>
-              <span className="text-xs font-semibold text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
-                Live Poller
+              <span className="text-xs font-semibold text-cyan-400 bg-cyan-500/10 px-2.5 py-1 rounded-full border border-cyan-500/20 flex items-center gap-1">
+                Details
               </span>
             </div>
             <h3 className="text-lg font-bold text-white mb-1">On-Chain Whales</h3>
             <p className="text-sm text-gray-400">Scanning real-time blocks for high-volume whale transfers and smart deposits.</p>
           </div>
 
-          <div className="glass-card rounded-3xl p-6 relative overflow-hidden group">
+          <div 
+            onClick={() => setActiveModal('ai')}
+            className="glass-card rounded-3xl p-6 relative overflow-hidden group cursor-pointer border hover:border-indigo-500/30"
+          >
             <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
             <div className="flex items-center justify-between mb-4">
               <span className="p-3 bg-indigo-500/10 rounded-2xl text-indigo-400 border border-indigo-500/20">
                 <Cpu className="w-6 h-6" />
               </span>
-              <span className="text-xs font-semibold text-cyan-400 bg-cyan-500/10 px-2.5 py-1 rounded-full border border-cyan-500/20">
-                Qwen Engine
+              <span className="text-xs font-semibold text-indigo-400 bg-indigo-500/10 px-2.5 py-1 rounded-full border border-indigo-500/20 flex items-center gap-1">
+                Details
               </span>
             </div>
             <h3 className="text-lg font-bold text-white mb-1">AI Analytical Scoring</h3>
             <p className="text-sm text-gray-400">Synthesizing raw transaction variables into formatted confidence and impact scores.</p>
           </div>
 
-          <div className="glass-card rounded-3xl p-6 relative overflow-hidden group">
+          <div 
+            onClick={() => setActiveModal('bitget')}
+            className="glass-card rounded-3xl p-6 relative overflow-hidden group cursor-pointer border hover:border-blue-500/30"
+          >
             <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
             <div className="flex items-center justify-between mb-4">
               <span className="p-3 bg-blue-500/10 rounded-2xl text-blue-400 border border-blue-500/20">
                 <TrendingUp className="w-6 h-6" />
               </span>
-              <span className="text-xs font-semibold text-blue-400 bg-blue-500/10 px-2.5 py-1 rounded-full border border-blue-500/20">
-                Bitget Core
+              <span className="text-xs font-semibold text-blue-400 bg-blue-500/10 px-2.5 py-1 rounded-full border border-blue-500/20 flex items-center gap-1">
+                Details
               </span>
             </div>
             <h3 className="text-lg font-bold text-white mb-1">Trading Integration</h3>
@@ -243,7 +288,7 @@ export default function App() {
 
             {/* TAB CONTENT: Signals Feed */}
             {activeTab === 'signals' && (
-              <div className="space-y-4">
+              <div className="max-h-[620px] overflow-y-auto pr-2 space-y-4">
                 {liveSignals.length === 0 ? (
                   <div className="glass-card rounded-3xl p-8 text-center text-gray-400">
                     <Activity className="w-8 h-8 mx-auto mb-3 text-cyan-400 animate-pulse" />
@@ -339,71 +384,73 @@ export default function App() {
           {/* Right: AI Copilot & Exchange Interface */}
           <section className="space-y-6">
             
-            {/* AI Research Terminal widget */}
-            <div className="glass-card rounded-3xl p-6 space-y-4">
-              <div className="flex items-center gap-3">
-                <span className="p-2 bg-cyan-500/10 rounded-xl text-cyan-400 border border-cyan-500/20">
-                  <Terminal className="w-5 h-5" />
-                </span>
-                <div>
-                  <h3 className="text-base font-bold text-white">AI Research Copilot</h3>
-                  <p className="text-xs text-gray-400">Directly query live narrative parameters</p>
+            {/* ROTATING LIQUID GLOWING BORDER AROUND ACTIVE CARD */}
+            <div className="relative p-[1px] rounded-3xl overflow-hidden bg-gradient-to-r from-cyan-500 via-indigo-500 to-blue-500 animate-pulse">
+              <div className="bg-[#030712]/95 backdrop-blur-xl rounded-[23px] p-6 space-y-4">
+                <div className="flex items-center gap-3">
+                  <span className="p-2 bg-cyan-500/10 rounded-xl text-cyan-400 border border-cyan-500/20">
+                    <Terminal className="w-5 h-5" />
+                  </span>
+                  <div>
+                    <h3 className="text-base font-bold text-white">AI Research Copilot</h3>
+                    <p className="text-xs text-gray-400">Directly query live narrative parameters</p>
+                  </div>
                 </div>
-              </div>
 
-              {/* Text Search Box */}
-              <div className="relative">
-                <input 
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Ask copilot anything..."
-                  className="w-full bg-white/5 border border-white/5 rounded-2xl py-2.5 pl-4 pr-10 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-cyan-500/50"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      triggerAIResearch(searchQuery);
-                    }
-                  }}
-                />
-                <Search className="absolute right-3.5 top-3 w-4 h-4 text-gray-500" />
-              </div>
-
-              <div className="space-y-2">
-                <button 
-                  onClick={() => {
-                    setSearchQuery("Check current AI Token narratives");
-                    triggerAIResearch("Check current AI Token narratives");
-                  }}
-                  className="w-full text-left p-3 rounded-2xl bg-white/5 border border-white/5 hover:border-cyan-500/30 text-xs text-gray-300 hover:text-white flex items-center justify-between transition-all"
-                >
-                  <span>Check current AI Token narratives</span>
-                  <ChevronRight className="w-4 h-4 text-cyan-400" />
-                </button>
-                <button 
-                  onClick={() => {
-                    setSearchQuery("Scan Solana liquidity levels");
-                    triggerAIResearch("Scan Solana liquidity levels");
-                  }}
-                  className="w-full text-left p-3 rounded-2xl bg-white/5 border border-white/5 hover:border-cyan-500/30 text-xs text-gray-300 hover:text-white flex items-center justify-between transition-all"
-                >
-                  <span>Scan Solana liquidity levels</span>
-                  <ChevronRight className="w-4 h-4 text-cyan-400" />
-                </button>
-              </div>
-
-              {/* Loader or AI Answer Box */}
-              {isSearching && (
-                <div className="p-4 bg-white/5 rounded-2xl border border-white/5 animate-pulse text-xs text-cyan-400">
-                  ⚡ Quering indices & generating macro analysis via Qwen Engine...
+                {/* Text Search Box */}
+                <div className="relative">
+                  <input 
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Ask copilot anything..."
+                    className="w-full bg-white/5 border border-white/5 rounded-2xl py-2.5 pl-4 pr-10 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-cyan-500/50"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        triggerAIResearch(searchQuery);
+                      }
+                    }}
+                  />
+                  <Search className="absolute right-3.5 top-3 w-4 h-4 text-gray-500" />
                 </div>
-              )}
 
-              {searchResponse && (
-                <div 
-                  className="p-4 bg-white/5 rounded-2xl border border-cyan-500/20 text-xs text-gray-300 leading-relaxed overflow-y-auto max-h-60"
-                  dangerouslySetInnerHTML={{ __html: searchResponse }}
-                />
-              )}
+                <div className="space-y-2">
+                  <button 
+                    onClick={() => {
+                      setSearchQuery("Check current AI Token narratives");
+                      triggerAIResearch("Check current AI Token narratives");
+                    }}
+                    className="w-full text-left p-3 rounded-2xl bg-white/5 border border-white/5 hover:border-cyan-500/30 text-xs text-gray-300 hover:text-white flex items-center justify-between transition-all"
+                  >
+                    <span>Check current AI Token narratives</span>
+                    <ChevronRight className="w-4 h-4 text-cyan-400" />
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setSearchQuery("Scan Solana liquidity levels");
+                      triggerAIResearch("Scan Solana liquidity levels");
+                    }}
+                    className="w-full text-left p-3 rounded-2xl bg-white/5 border border-white/5 hover:border-cyan-500/30 text-xs text-gray-300 hover:text-white flex items-center justify-between transition-all"
+                  >
+                    <span>Scan Solana liquidity levels</span>
+                    <ChevronRight className="w-4 h-4 text-cyan-400" />
+                  </button>
+                </div>
+
+                {/* Loader or AI Answer Box */}
+                {isSearching && (
+                  <div className="p-4 bg-white/5 rounded-2xl border border-white/5 animate-pulse text-xs text-cyan-400">
+                    ⚡ Quering indices & generating macro analysis via Qwen Engine...
+                  </div>
+                )}
+
+                {searchResponse && (
+                  <div 
+                    className="p-4 bg-white/5 rounded-2xl border border-cyan-500/20 text-xs text-gray-300 leading-relaxed overflow-y-auto max-h-60"
+                    dangerouslySetInnerHTML={{ __html: searchResponse }}
+                  />
+                )}
+              </div>
             </div>
 
             {/* Bitget Asset Summary Widget */}
@@ -418,7 +465,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Render either Bitget Assets or a configuration indicator */}
               {bitgetError ? (
                 <div className="p-4 bg-yellow-500/5 border border-yellow-500/10 rounded-2xl text-xs text-yellow-400/80 leading-relaxed">
                   ⚠️ {bitgetError}
@@ -453,6 +499,81 @@ export default function App() {
 
         </main>
       </div>
+
+      {/* DETAILED GLASSMORPHIC MODAL OVERLAYS */}
+      {activeModal && (
+        <div className="fixed inset-0 z-100 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xl">
+          <div className="glass-card max-w-lg w-full rounded-3xl p-6 relative overflow-hidden border border-white/10 shadow-2xl">
+            <button 
+              onClick={() => setActiveModal(null)}
+              className="absolute top-4 right-4 p-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full text-gray-400 hover:text-white cursor-pointer transition-all"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            {activeModal === 'whales' && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <span className="p-3 bg-cyan-500/10 rounded-2xl text-cyan-400 border border-cyan-500/20">
+                    <Activity className="w-6 h-6" />
+                  </span>
+                  <h3 className="text-xl font-bold text-white">On-Chain Whale Scanner</h3>
+                </div>
+                <p className="text-sm text-gray-300 leading-relaxed">
+                  SmartFlow AI directly listens to live blocks on the Ethereum network. Our sub-second WebSocket engine captures transactions exceeding 100 ETH or transactions emitted directly from our database of monitored smart wallets.
+                </p>
+                <div className="p-4 bg-white/5 rounded-2xl border border-white/5 space-y-2 text-xs text-gray-400">
+                  <span className="block font-semibold text-white">Active Scanned Targets:</span>
+                  <span>• Vitalik Buterin (Elite Trader)</span><br />
+                  <span>• Binance Cold Wallet (Exchange Node)</span><br />
+                  <span>• Lido Treasury & a16z (Venture Funds)</span>
+                </div>
+              </div>
+            )}
+
+            {activeModal === 'ai' && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <span className="p-3 bg-indigo-500/10 rounded-2xl text-indigo-400 border border-indigo-500/20">
+                    <Cpu className="w-6 h-6" />
+                  </span>
+                  <h3 className="text-xl font-bold text-white">AI Analytical Scoring</h3>
+                </div>
+                <p className="text-sm text-gray-300 leading-relaxed">
+                  Every on-chain event is formatted and passed to the Alibaba Qwen model alongside real-time web search parameters via Tavily. The AI evaluates previous accumulations, scores risk level, and writes semantic descriptions.
+                </p>
+                <div className="p-4 bg-white/5 rounded-2xl border border-white/5 space-y-2 text-xs text-gray-400">
+                  <span className="block font-semibold text-white">Structured Output Rules:</span>
+                  <span>• Strict JSON schema parameters check</span><br />
+                  <span>• Dynamic 1-hour semantic query caching enabled</span><br />
+                  <span>• Dual Aliyun Failover Routing configured</span>
+                </div>
+              </div>
+            )}
+
+            {activeModal === 'bitget' && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <span className="p-3 bg-blue-500/10 rounded-2xl text-blue-400 border border-blue-500/20">
+                    <TrendingUp className="w-6 h-6" />
+                  </span>
+                  <h3 className="text-xl font-bold text-white">Bitget Trading Integration</h3>
+                </div>
+                <p className="text-sm text-gray-300 leading-relaxed">
+                  Link your personal Bitget account directly to SmartFlow AI using your private API keys. Our system features a dynamic clock drift sync offset to ensure your requests are executed with perfect timestamp sync.
+                </p>
+                <div className="p-4 bg-white/5 rounded-2xl border border-white/5 space-y-2 text-xs text-gray-400">
+                  <span className="block font-semibold text-white">Supported Operations:</span>
+                  <span>• Spot Asset balance polling (V2 API)</span><br />
+                  <span>• Automated Base64 HMAC SHA256 Signature signing</span><br />
+                  <span>• Direct Limit/Market Spot Trades execution</span>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
