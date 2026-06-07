@@ -22,7 +22,6 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan(config.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
-// Mount our clean modular router
 app.use('/', apiRouter);
 
 const server = app.listen(config.PORT, () => {
@@ -36,7 +35,26 @@ const server = app.listen(config.PORT, () => {
     BlockchainTrackerService.startLiveScanner(async (signals) => {
       for (const signal of signals) {
         // Push actual live transactions directly to the decoupled State Manager
-        SignalStateManager.addSignal(signal);
+        await SignalStateManager.addSignal(signal);
+
+        // Retrieve all registered subscriber Chat IDs from Supabase database
+        const subscribers = await SignalStateManager.getSubscribers();
+
+        // Broadcast the live AI transaction alert card to every active subscriber instantly
+        for (const sub of subscribers) {
+          const formattedAlert = 
+            `🚨 <b>SMART MONEY MOVEMENT DETECTED</b> 🚨\n\n` +
+            `• <b>Wallet:</b> <code>${signal.walletLabel}</code>\n` +
+            `• <b>Category:</b> <code>${signal.walletCategory}</code>\n` +
+            `• <b>Action:</b> <code>${signal.action} ${signal.amount} ${signal.asset}</code>\n` +
+            `• <b>Confidence Score:</b> <code>${signal.confidenceScore}%</code>\n` +
+            `• <b>Expected Impact:</b> <code>${signal.impactScore}/100</code>\n\n` +
+            `🧠 <b>AI Intelligence Analysis:</b>\n` +
+            `<i>"${signal.aiExplanation}"</i>\n\n` +
+            `🔗 <a href="https://etherscan.io/tx/${signal.transactionHash}">View Transaction on Etherscan</a>`;
+
+          await TelegramBotService.broadcastAlert(sub.chat_id, formattedAlert);
+        }
 
         console.log(`[Scanner Signal] Captured real transaction from ${signal.walletLabel}.`);
       }

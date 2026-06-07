@@ -4,10 +4,8 @@ import { SmartMoneySignal } from '../types/index.js';
 
 export class SignalStateManager {
   private static readonly ENDPOINT = `${config.SUPABASE_URL}/rest/v1/signals`;
+  private static readonly SUB_ENDPOINT = `${config.SUPABASE_URL}/rest/v1/subscribers`;
 
-  /**
-   * Helper: Generates headers required to authorize against the Supabase REST gateway
-   */
   private static getHeaders() {
     return {
       'apikey': config.SUPABASE_KEY,
@@ -17,12 +15,8 @@ export class SignalStateManager {
     };
   }
 
-  /**
-   * Writes a scanned blockchain transaction directly to Supabase PostgreSQL
-   */
   public static async addSignal(signal: SmartMoneySignal): Promise<void> {
     try {
-      // Map frontend-typings to PostgreSQL snake_case columns
       const dbPayload = {
         transaction_hash: signal.transactionHash,
         wallet_label: signal.walletLabel,
@@ -39,7 +33,6 @@ export class SignalStateManager {
       await axios.post(this.ENDPOINT, dbPayload, { headers: this.getHeaders() });
       console.log(`[Database] Scanned transaction ${signal.transactionHash.substring(0, 10)}... safely written to Supabase.`);
     } catch (err: any) {
-      // Handle unique constraint violations silently if scanner duplicates catches
       if (err.response?.status === 409) {
         return;
       }
@@ -47,9 +40,6 @@ export class SignalStateManager {
     }
   }
 
-  /**
-   * Queries the 50 most recent actual on-chain transaction signals recorded in PostgreSQL
-   */
   public static async getSignals(): Promise<SmartMoneySignal[]> {
     try {
       const response = await axios.get(
@@ -58,7 +48,6 @@ export class SignalStateManager {
       );
 
       if (response.data && Array.isArray(response.data)) {
-        // Map database columns back to camelCase frontend contracts
         return response.data.map((row: any) => ({
           transactionHash: row.transaction_hash,
           walletLabel: row.wallet_label,
@@ -76,6 +65,51 @@ export class SignalStateManager {
       return [];
     } catch (err: any) {
       console.error('[Database Error] Failed to retrieve signals from Supabase:', err.response?.data || err.message);
+      return [];
+    }
+  }
+
+  /**
+   * Registers a user Chat ID for live block broadcasts on Supabase
+   */
+  public static async addSubscriber(chatId: string): Promise<void> {
+    try {
+      await axios.post(
+        this.SUB_ENDPOINT,
+        { chat_id: chatId.toString() },
+        { headers: this.getHeaders() }
+      );
+      console.log(`[Database] New subscriber registered: ${chatId}`);
+    } catch (err: any) {
+      if (err.response?.status === 409) return; // Silent return if already registered
+      console.error('[Database Error] Subscriber write failed:', err.response?.data || err.message);
+    }
+  }
+
+  /**
+   * Unregisters a user Chat ID on Supabase
+   */
+  public static async removeSubscriber(chatId: string): Promise<void> {
+    try {
+      await axios.delete(
+        `${this.SUB_ENDPOINT}?chat_id=eq.${chatId}`,
+        { headers: this.getHeaders() }
+      );
+      console.log(`[Database] Subscriber unsubscribed: ${chatId}`);
+    } catch (err: any) {
+      console.error('[Database Error] Subscriber delete failed:', err.response?.data || err.message);
+    }
+  }
+
+  /**
+   * Retrieves all active subscribers for WebSocket live broadcasting
+   */
+  public static async getSubscribers(): Promise<any[]> {
+    try {
+      const response = await axios.get(this.SUB_ENDPOINT, { headers: this.getHeaders() });
+      return response.data || [];
+    } catch (err: any) {
+      console.error('[Database Error] Failed to retrieve subscribers:', err.response?.data || err.message);
       return [];
     }
   }

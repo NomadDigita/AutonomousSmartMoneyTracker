@@ -11,6 +11,9 @@ import { SignalStateManager } from './signalState.js';
 export class TelegramBotService {
   private static bot: Telegraf;
 
+  // Resilient, high-rate public node provider used strictly for bot balance queries
+  private static readonly REQ_RPC = 'https://eth.llamarpc.com';
+
   private static sanitizeTelegramHtml(text: string): string {
     return text
       .replace(/<!DOCTYPE[^>]*>/gi, '')
@@ -40,7 +43,7 @@ export class TelegramBotService {
           `🛡 <b>Welcome to SmartFlow AI Agent Safety Monitor</b> 🛡\n` +
           `<i>Check before you execute.</i>\n\n` +
           `I am an autonomous secure trading bot engineered to scan active blocks, analyze on-chain smart money movements, and check live token pools.\n\n` +
-          `🤖 <b>Core Commands:</b>\n` +
+          `🤖 <b>Core Functions Available:</b>\n` +
           `• 🐳 <b>Monitored Wallets</b> - View smart money addresses\n` +
           `• 📈 <b>Bitget Spot Balances</b> - Check account spot balances\n` +
           `• ⚡ <b>System Status</b> - Check active node diagnostics\n` +
@@ -53,6 +56,7 @@ export class TelegramBotService {
             Markup.keyboard([
               ['🐳 Monitored Wallets', '📈 Bitget Spot Balances'],
               ['💡 Narrative Insights', '📊 Sector Rotations'],
+              ['🔔 Enable Alerts', '🔕 Disable Alerts'],
               ['⚡ System Status', 'ℹ️ Help Guide']
             ]).resize().persistent()
           );
@@ -61,6 +65,7 @@ export class TelegramBotService {
         }
       });
 
+      // Bottom persistent reply keyboard bindings
       this.bot.hears('🐳 Monitored Wallets', async (ctx) => {
         await this.handleWhalesRequest(ctx);
       });
@@ -85,7 +90,19 @@ export class TelegramBotService {
         await this.handleHelpRequest(ctx);
       });
 
-      // Slash command listeners
+      // Persistent Alert Controls (Writes to Supabase)
+      this.bot.hears('🔔 Enable Alerts', async (ctx) => {
+        if (!ctx.chat?.id) return;
+        await SignalStateManager.addSubscriber(ctx.chat.id.toString());
+        await ctx.replyWithHTML('🔔 <b>Real-time Whale Alerts Enabled!</b>\n\nYou will now receive instant, AI-scored notifications when the WebSocket block scanner captures institutional movements on-chain.');
+      });
+
+      this.bot.hears('🔕 Disable Alerts', async (ctx) => {
+        if (!ctx.chat?.id) return;
+        await SignalStateManager.removeSubscriber(ctx.chat.id.toString());
+        await ctx.replyWithHTML('🔕 <b>Alerts Disabled.</b>\n\nYou will no longer receive proactive block scanner broadcasts.');
+      });
+
       this.bot.command('whales', async (ctx) => {
         await this.handleWhalesRequest(ctx);
       });
@@ -98,7 +115,6 @@ export class TelegramBotService {
         await this.handleNarrativeRequest(ctx);
       });
 
-      // CORE FEATURE: /feed Command (Loads actual signals from Supabase PostgreSQL)
       this.bot.command('feed', async (ctx) => {
         await this.handleFeedRequest(ctx);
       });
@@ -115,8 +131,8 @@ export class TelegramBotService {
       });
 
       this.bot.launch()
-        .then(() => console.log('[Telegram] Persistent Keyboard Bot online.'))
-        .catch(() => console.warn('[Telegram Warning] Handshake deferred. Retrying...'));
+        .then(() => console.log('[Telegram] Bot active and polling commands.'))
+        .catch(() => console.warn('[Telegram Warning] Initial handshake deferred. Reconnecting...'));
 
     } catch (err: any) {
       console.error('[Telegram Init Error]:', err.message);
@@ -124,30 +140,35 @@ export class TelegramBotService {
   }
 
   /**
-   * Core Handler: Fetch actual live balances with robust try-catch around individual wallet calls
+   * Refactored: Runs parallelized RPC requests over LlamaRPC, preventing rate-limiting blocks
    */
   private static async handleWhalesRequest(ctx: any): Promise<void> {
     const loadingMessage = await ctx.replyWithHTML('⏳ <i>Connecting to Ethereum node and scanning live wallet balances...</i>');
     
     try {
-      const provider = await BlockchainTrackerService.getProvider();
+      // Connect to a high-capacity, public LlamaRPC gateway
+      const provider = new ethers.JsonRpcProvider(this.REQ_RPC, undefined, { staticNetwork: true });
       let responseText = `🐳 <b>Live Smart Money Balances (Blockchain Scan):</b>\n\n`;
 
-      for (const wallet of BlockchainTrackerService.WATCHED_WALLETS) {
-        let balanceEth = '0.00';
+      // Execute balance requests in parallel to prevent network rate limits
+      const balancePromises = BlockchainTrackerService.WATCHED_WALLETS.map(async (wallet) => {
         try {
-          // Query individual balance with strict timeout/error isolation
           const balanceWei = await provider.getBalance(wallet.address);
-          balanceEth = parseFloat(ethers.formatEther(balanceWei)).toFixed(2);
+          const balanceEth = parseFloat(ethers.formatEther(balanceWei)).toFixed(2);
+          return { ...wallet, balanceEth, success: true };
         } catch {
-          balanceEth = 'Rate Limited / Offline';
+          return { ...wallet, balanceEth: 'Offline', success: false };
         }
+      });
 
+      const results = await Promise.all(balancePromises);
+
+      for (const res of results) {
         responseText += 
-          `📍 <b>${wallet.label}</b>\n` +
-          `• Type: <code>${wallet.category}</code>\n` +
-          `• Address: <code>${wallet.address.substring(0, 8)}...${wallet.address.substring(34)}</code>\n` +
-          `• Balance: <code>${balanceEth !== 'Rate Limited / Offline' ? parseFloat(balanceEth).toLocaleString() + ' ETH' : balanceEth}</code>\n\n`;
+          `📍 <b>${res.label}</b>\n` +
+          `• Type: <code>${res.category}</code>\n` +
+          `• Address: <code>${res.address.substring(0, 8)}...${res.address.substring(34)}</code>\n` +
+          `• Balance: <code>${res.success ? parseFloat(res.balanceEth).toLocaleString() + ' ETH' : 'Rate Limited / Offline'}</code>\n\n`;
       }
 
       if (ctx.chat?.id) {
@@ -162,9 +183,6 @@ export class TelegramBotService {
     }
   }
 
-  /**
-   * CORE HANDLER: /feed (Streams actual scanned signals from Supabase)
-   */
   private static async handleFeedRequest(ctx: any): Promise<void> {
     const loadingMessage = await ctx.replyWithHTML('⏳ <i>Connecting to Supabase Cloud and retrieving on-chain alerts...</i>');
     try {
@@ -180,7 +198,6 @@ export class TelegramBotService {
 
       let responseText = `📡 <b>Live Smart Money Signals Feed (Supabase Postgres):</b>\n\n`;
       
-      // Limit to most recent 5 signals
       signals.slice(0, 5).forEach((sig) => {
         responseText += 
           `🚨 <b>${sig.walletLabel} (${sig.walletCategory})</b>\n` +
@@ -251,12 +268,11 @@ Return a structured HTML report with an exact ranked list. Keep it concise, high
         await ctx.telegram.deleteMessage(ctx.chat.id, loadingMessage.message_id).catch(() => {});
       }
       
-      // Graceful fallback if Render environment lacks QWEN_API_KEY
+      // Removed mock fallbacks. Returns a direct, helpful diagnostic statement
       await ctx.replyWithHTML(
-        `📊 <b>Smart Money Sector Inflows (Cached Briefing):</b>\n\n` +
-        `• <b>Artificial Intelligence (AI):</b> 87% Accumulation (High Inflows)\n` +
-        `• <b>Real World Assets (RWA):</b> 72% Accumulation (Moderate Inflows)\n` +
-        `• <b>DeFi Protocols:</b> 59% Accumulation (Stable Volume)`
+        `📊 <b>Smart Money Sector Inflows (Diagnostics Needed):</b>\n\n` +
+        `⚠️ Aliyun API Key (QWEN_API_KEY) was rejected or is missing from your Render Environment Settings dashboard.\n\n` +
+        `<i>Please log in to your Render.com settings page, paste your real Qwen API key under Environment variables, and click Save.</i>`
       );
     }
   }
@@ -283,12 +299,11 @@ Use bullet points, <b>, <i>, and <code> formatting. Do NOT output markdown code 
         await ctx.telegram.deleteMessage(ctx.chat.id, loadingMessage.message_id).catch(() => {});
       }
       
-      // Graceful fallback if Render environment lacks QWEN_API_KEY
+      // Removed mock fallbacks. Returns a direct, helpful diagnostic statement
       await ctx.replyWithHTML(
-        `💡 <b>AI Narrative Intelligence Feed (Cached Briefing):</b>\n\n` +
-        `• <b>Capital Rotation:</b> Smart money is rotating out of stables into L1 networks.\n` +
-        `• <b>Leading Assets:</b> Ethereum and Solana lead institutional accumulation volumes.\n` +
-        `• <b>Theme:</b> Bullish outlook dominates as spot flows confirm structural conviction.`
+        `💡 <b>AI Narrative Intelligence Feed (Diagnostics Needed):</b>\n\n` +
+        `⚠️ Aliyun API Key (QWEN_API_KEY) was rejected or is missing from your Render Environment Settings dashboard.\n\n` +
+        `<i>Please log in to your Render.com settings page, paste your real Qwen API key under Environment variables, and click Save.</i>`
       );
     }
   }
@@ -302,7 +317,7 @@ Use bullet points, <b>, <i>, and <code> formatting. Do NOT output markdown code 
       `• Solana Node RPC: <code>Active</code>\n` +
       `• Bitget API Verification: <code>Authorized (Base64 Active)</code>\n` +
       `• System Uptime: <code>${uptime}s</code>\n` +
-      `• Node Providers: <code>Cloudflare, PublicNode</code>`
+      `• Node Providers: <code>LlamaRPC, PublicNode</code>`
     );
   }
 
