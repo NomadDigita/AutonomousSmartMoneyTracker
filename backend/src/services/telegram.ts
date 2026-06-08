@@ -1,5 +1,6 @@
 import { Telegraf, Markup } from 'telegraf';
 import { ethers } from 'ethers';
+import axios from 'axios';
 import { config } from '../config/index.js';
 import { BlockchainTrackerService } from './tracker.js';
 import { DexScreenerService } from './dexscreener.js';
@@ -11,7 +12,6 @@ import { SignalStateManager } from './signalState.js';
 export class TelegramBotService {
   private static bot: Telegraf;
 
-  // Resilient, high-rate public node provider used strictly for bot balance queries
   private static readonly REQ_RPC = 'https://eth.llamarpc.com';
 
   private static sanitizeTelegramHtml(text: string): string {
@@ -47,7 +47,8 @@ export class TelegramBotService {
           `• 🐳 <b>Monitored Wallets</b> - View smart money addresses\n` +
           `• 📈 <b>Bitget Spot Balances</b> - Check account spot balances\n` +
           `• ⚡ <b>System Status</b> - Check active node diagnostics\n` +
-          `• 📡 <code>/feed</code> - View real-time scanned transaction signals\n\n` +
+          `• 📡 <code>/feed</code> - View real-time scanned transaction signals\n` +
+          `• 🔮 <code>/prediction</code> - Gathers AI macroeconomic forecasts\n\n` +
           `📌 Use the persistent bottom menu to scan targets, monitor metrics, or query systems in real-time.`;
 
         try {
@@ -119,6 +120,10 @@ export class TelegramBotService {
         await this.handleFeedRequest(ctx);
       });
 
+      this.bot.command('prediction', async (ctx) => {
+        await this.handlePredictionRequest(ctx);
+      });
+
       this.bot.command('watch', async (ctx) => {
         try {
           const text = ctx.message.text.trim();
@@ -131,33 +136,40 @@ export class TelegramBotService {
       });
 
       this.bot.launch()
-        .then(() => console.log('[Telegram] Bot active and polling commands.'))
-        .catch(() => console.warn('[Telegram Warning] Initial handshake deferred. Reconnecting...'));
+        .then(() => console.log('[Telegram] Persistent Keyboard Bot online.'))
+        .catch(() => console.warn('[Telegram Warning] Handshake deferred. Retrying...'));
 
     } catch (err: any) {
       console.error('[Telegram Init Error]:', err.message);
     }
   }
 
-  /**
-   * Refactored: Runs parallelized RPC requests over LlamaRPC, preventing rate-limiting blocks
-   */
   private static async handleWhalesRequest(ctx: any): Promise<void> {
-    const loadingMessage = await ctx.replyWithHTML('⏳ <i>Connecting to Ethereum node and scanning live wallet balances...</i>');
+    const loadingMessage = await ctx.replyWithHTML('⏳ <i>Connecting to Blockscout Indexer and scanning live wallet balances...</i>');
     
     try {
-      // Connect to a high-capacity, public LlamaRPC gateway
       const provider = new ethers.JsonRpcProvider(this.REQ_RPC, undefined, { staticNetwork: true });
-      let responseText = `🐳 <b>Live Smart Money Balances (Blockchain Scan):</b>\n\n`;
+      let responseText = `🐳 <b>Live Smart Money Balances (Blockscout Scan):</b>\n\n`;
 
-      // Execute balance requests in parallel to prevent network rate limits
       const balancePromises = BlockchainTrackerService.WATCHED_WALLETS.map(async (wallet) => {
         try {
-          const balanceWei = await provider.getBalance(wallet.address);
-          const balanceEth = parseFloat(ethers.formatEther(balanceWei)).toFixed(2);
-          return { ...wallet, balanceEth, success: true };
+          const url = `https://eth.blockscout.com/api/v2/addresses/${wallet.address}`;
+          const res = await axios.get(url, { timeout: 4000 });
+          
+          if (res.data && res.data.coin_balance) {
+            const balanceWei = BigInt(res.data.coin_balance);
+            const balanceEth = parseFloat(ethers.formatUnits(balanceWei, 18)).toFixed(2);
+            
+            const rate = parseFloat(res.data.exchange_rate || '0');
+            const balanceUsd = rate > 0 
+              ? ` ($${(parseFloat(balanceEth) * rate).toLocaleString(undefined, { maximumFractionDigits: 0 })} USD)`
+              : '';
+
+            return { ...wallet, balanceEth, balanceUsd, success: true };
+          }
+          return { ...wallet, balanceEth: '0.00', balanceUsd: '', success: false };
         } catch {
-          return { ...wallet, balanceEth: 'Offline', success: false };
+          return { ...wallet, balanceEth: 'Offline', balanceUsd: '', success: false };
         }
       });
 
@@ -168,7 +180,7 @@ export class TelegramBotService {
           `📍 <b>${res.label}</b>\n` +
           `• Type: <code>${res.category}</code>\n` +
           `• Address: <code>${res.address.substring(0, 8)}...${res.address.substring(34)}</code>\n` +
-          `• Balance: <code>${res.success ? parseFloat(res.balanceEth).toLocaleString() + ' ETH' : 'Rate Limited / Offline'}</code>\n\n`;
+          `• Balance: <code>${res.success ? parseFloat(res.balanceEth).toLocaleString() + ' ETH' + res.balanceUsd : 'Rate Limited / Offline'}</code>\n\n`;
       }
 
       if (ctx.chat?.id) {
@@ -267,8 +279,6 @@ Return a structured HTML report with an exact ranked list. Keep it concise, high
       if (ctx.chat?.id) {
         await ctx.telegram.deleteMessage(ctx.chat.id, loadingMessage.message_id).catch(() => {});
       }
-      
-      // Removed mock fallbacks. Returns a direct, helpful diagnostic statement
       await ctx.replyWithHTML(
         `📊 <b>Smart Money Sector Inflows (Diagnostics Needed):</b>\n\n` +
         `⚠️ Aliyun API Key (QWEN_API_KEY) was rejected or is missing from your Render Environment Settings dashboard.\n\n` +
@@ -298,12 +308,48 @@ Use bullet points, <b>, <i>, and <code> formatting. Do NOT output markdown code 
       if (ctx.chat?.id) {
         await ctx.telegram.deleteMessage(ctx.chat.id, loadingMessage.message_id).catch(() => {});
       }
-      
-      // Removed mock fallbacks. Returns a direct, helpful diagnostic statement
       await ctx.replyWithHTML(
         `💡 <b>AI Narrative Intelligence Feed (Diagnostics Needed):</b>\n\n` +
         `⚠️ Aliyun API Key (QWEN_API_KEY) was rejected or is missing from your Render Environment Settings dashboard.\n\n` +
         `<i>Please log in to your Render.com settings page, paste your real Qwen API key under Environment variables, and click Save.</i>`
+      );
+    }
+  }
+
+  private static async handlePredictionRequest(ctx: any): Promise<void> {
+    const loadingMessage = await ctx.replyWithHTML('⏳ <i>Retrieving on-chain indices, funding rates, and generating AI market forecasts...</i>');
+    try {
+      const searchQuery = 'ethereum price prediction technical analysis smart money accumulation indices';
+      const webContext = await TavilyService.searchNarrative(searchQuery);
+
+      const systemPrompt = 
+        `You are a lead trading analyst for the Bitget AI Team. Based on the web context, formulate a 24-hour technical forecast for Ethereum.
+Format the output precisely with standard HTML tags. Use the format:
+🔮 <b>Ethereum 24h AI Market Forecast:</b>
+
+• <b>Market Bias:</b> [BULLISH/BEARISH/NEUTRAL]
+• <b>Confidence Index:</b> [0-100]%
+• <b>Expected Resistance:</b> $[Value]
+• <b>Expected Support:</b> $[Value]
+
+🧠 <b>AI Quantitative Synthesis:</b>
+<i>"[Brief 2-sentence structural on-chain justification]"</i>`;
+
+      const aiResponse = await QwenService.analyzeMarketData(systemPrompt, webContext);
+      const sanitized = this.sanitizeTelegramHtml(aiResponse);
+
+      if (ctx.chat?.id) {
+        await ctx.telegram.deleteMessage(ctx.chat.id, loadingMessage.message_id).catch(() => {});
+      }
+      await ctx.replyWithHTML(sanitized);
+    } catch (err: any) {
+      if (ctx.chat?.id) {
+        await ctx.telegram.deleteMessage(ctx.chat.id, loadingMessage.message_id).catch(() => {});
+      }
+      await ctx.replyWithHTML(
+        `🔮 <b>AI Market Forecast (Diagnostics Needed):</b>\n\n` +
+        `⚠️ Aliyun API Key (QWEN_API_KEY) was rejected or is missing from your Render Environment Settings dashboard.\n\n` +
+        `<i>Please configure your environment variables to unlock real-time forecasting.</i>`
       );
     }
   }
@@ -317,7 +363,7 @@ Use bullet points, <b>, <i>, and <code> formatting. Do NOT output markdown code 
       `• Solana Node RPC: <code>Active</code>\n` +
       `• Bitget API Verification: <code>Authorized (Base64 Active)</code>\n` +
       `• System Uptime: <code>${uptime}s</code>\n` +
-      `• Node Providers: <code>LlamaRPC, PublicNode</code>`
+      `• Node Providers: <code>Blockscout Indexer, PublicNode</code>`
     );
   }
 
@@ -327,6 +373,7 @@ Use bullet points, <b>, <i>, and <code> formatting. Do NOT output markdown code 
       `• <b>🐳 Monitored Wallets:</b> Triggers real-time connection to Ethereum blockchain to query current balances of high-profile smart wallets.\n` +
       `• <b>📈 Bitget Spot Balances:</b> Authenticates your keys and queries spot assets from your Bitget portfolio.\n` +
       `• <b>📡 /feed:</b> Fetches and displays actual live block transactions parsed and stored inside Supabase database.\n` +
+      `• <b>🔮 /prediction:</b> Gathers AI technical forecasts and support/resistance markers.\n` +
       `• <b>📊 Sector Rotations:</b> Dispatches AI agents to analyze trending categories.\n` +
       `• <b>💡 Narrative Insights:</b> Synthesizes macro market trends.`
     );
@@ -371,4 +418,4 @@ Use bullet points, <b>, <i>, and <code> formatting. Do NOT output markdown code 
       } catch {}
     }
   }
-}
+} // Correct final closing brace of class

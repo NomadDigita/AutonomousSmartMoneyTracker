@@ -42,6 +42,8 @@ const server = app.listen(config.PORT, () => {
 
         // Broadcast the live AI transaction alert card to every active subscriber instantly
         for (const sub of subscribers) {
+          if (!sub.chat_id) continue;
+
           const formattedAlert = 
             `🚨 <b>SMART MONEY MOVEMENT DETECTED</b> 🚨\n\n` +
             `• <b>Wallet:</b> <code>${signal.walletLabel}</code>\n` +
@@ -53,7 +55,8 @@ const server = app.listen(config.PORT, () => {
             `<i>"${signal.aiExplanation}"</i>\n\n` +
             `🔗 <a href="https://etherscan.io/tx/${signal.transactionHash}">View Transaction on Etherscan</a>`;
 
-          await TelegramBotService.broadcastAlert(sub.chat_id, formattedAlert);
+          // Explicitly converts any dynamic parameter to a strict string to satisfy the compiler
+          await TelegramBotService.broadcastAlert(sub.chat_id.toString(), formattedAlert);
         }
 
         console.log(`[Scanner Signal] Captured real transaction from ${signal.walletLabel}.`);
