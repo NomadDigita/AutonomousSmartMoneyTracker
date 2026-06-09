@@ -134,6 +134,7 @@ export default function App() {
         if (bitgetRes.data?.success) {
           setBitgetAssets(bitgetRes.data.data);
           setBitgetError(null);
+          setBitgetError(null);
         }
       } catch (bErr: any) {
         setBitgetError(bErr.response?.data?.message || 'Bitget API key configuration offline.');
@@ -202,7 +203,7 @@ export default function App() {
     setSearchResponse('');
     
     try {
-      const response = await axios.get(`https://api.coingecko.com/api/v3/simple/price?ids=ethereum,solana,jupiter-exchange-solana&vs_currencies=usd&include_24hr_change=true`);
+      const response = await axios.get('https://api.coingecko.com/api/v3/simple/price?ids=ethereum,solana,jupiter-exchange-solana&vs_currencies=usd&include_24hr_change=true');
       
       const ethPrice = response.data.ethereum.usd;
       const ethChange = response.data.ethereum.usd_24h_change.toFixed(2);
@@ -308,7 +309,7 @@ export default function App() {
       {/* Main Container */}
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 z-10">
 
-        {/* APPLE-STANDARD TRANSLUCENT FROSTED SLATE WELCOME HERO CARD */}
+        {/* WELCOME HERO CARD */}
         <div className="bg-slate-950/50 backdrop-blur-xl rounded-3xl p-6 mb-8 relative overflow-hidden border border-white/12 shadow-[0_8px_32px_0_rgba(0,0,0,0.4)] animate-float-medium">
           <div className="absolute top-0 right-0 w-48 h-48 bg-cyan-500/5 rounded-full blur-3xl pointer-events-none" />
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
