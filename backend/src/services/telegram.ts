@@ -48,7 +48,7 @@ export class TelegramBotService {
           `• 📈 <b>Bitget Spot Balances</b> - Check account spot balances\n` +
           `• ⚡ <b>System Status</b> - Check active node diagnostics\n` +
           `• 📡 <code>/feed</code> - View real-time scanned transaction signals\n` +
-          `• 🔮 <code>/prediction</code> - Gathers AI macroeconomic forecasts\n\n` +
+          `• 🔮 <code>/prediction [coin]</code> - Gathers AI macroeconomic forecasts\n\n` +
           `📌 Use the persistent bottom menu to scan targets, monitor metrics, or query systems in real-time.`;
 
         try {
@@ -91,7 +91,6 @@ export class TelegramBotService {
         await this.handleHelpRequest(ctx);
       });
 
-      // Persistent Alert Controls (Writes to Supabase)
       this.bot.hears('🔔 Enable Alerts', async (ctx) => {
         if (!ctx.chat?.id) return;
         await SignalStateManager.addSubscriber(ctx.chat.id.toString());
@@ -120,8 +119,12 @@ export class TelegramBotService {
         await this.handleFeedRequest(ctx);
       });
 
+      // DYNAMIC COIN PREDICTOR: Parses /prediction [coin]
       this.bot.command('prediction', async (ctx) => {
-        await this.handlePredictionRequest(ctx);
+        const text = ctx.message.text.trim();
+        const args = text.split(' ');
+        const targetCoin = args.length > 1 ? args[1].toUpperCase() : 'ETH';
+        await this.handlePredictionRequest(ctx, targetCoin);
       });
 
       this.bot.command('watch', async (ctx) => {
@@ -137,7 +140,7 @@ export class TelegramBotService {
 
       this.bot.launch()
         .then(() => console.log('[Telegram] Persistent Keyboard Bot online.'))
-        .catch(() => console.warn('[Telegram Warning] Handshake deferred. Reconnecting...'));
+        .catch(() => console.warn('[Telegram Warning] Handshake deferred. Retrying...'));
 
     } catch (err: any) {
       console.error('[Telegram Init Error]:', err.message);
@@ -316,16 +319,19 @@ Use bullet points, <b>, <i>, and <code> formatting. Do NOT output markdown code 
     }
   }
 
-  private static async handlePredictionRequest(ctx: any): Promise<void> {
-    const loadingMessage = await ctx.replyWithHTML('⏳ <i>Retrieving on-chain indices, funding rates, and generating AI market forecasts...</i>');
+  /**
+   * Dynamic Macro Predictor: accepts argument for target asset (BTC, SOL, ETH, etc.)
+   */
+  private static async handlePredictionRequest(ctx: any, targetCoin: string): Promise<void> {
+    const loadingMessage = await ctx.replyWithHTML(`⏳ <i>Retrieving ${targetCoin} indices, volume, and generating AI market forecasts...</i>`);
     try {
-      const searchQuery = 'ethereum price prediction technical analysis smart money accumulation indices';
+      const searchQuery = `${targetCoin.toLowerCase()} price prediction technical analysis smart money accumulation indices`;
       const webContext = await TavilyService.searchNarrative(searchQuery);
 
       const systemPrompt = 
-        `You are a lead trading analyst for the Bitget AI Team. Based on the web context, formulate a 24-hour technical forecast for Ethereum.
+        `You are a lead trading analyst for the Bitget AI Team. Based on the web context, formulate a 24-hour technical forecast for ${targetCoin}.
 Format the output precisely with standard HTML tags. Use the format:
-🔮 <b>Ethereum 24h AI Market Forecast:</b>
+🔮 <b>${targetCoin} 24h AI Market Forecast:</b>
 
 • <b>Market Bias:</b> [BULLISH/BEARISH/NEUTRAL]
 • <b>Confidence Index:</b> [0-100]%
@@ -347,7 +353,7 @@ Format the output precisely with standard HTML tags. Use the format:
         await ctx.telegram.deleteMessage(ctx.chat.id, loadingMessage.message_id).catch(() => {});
       }
       await ctx.replyWithHTML(
-        `🔮 <b>AI Market Forecast (Diagnostics Needed):</b>\n\n` +
+        `🔮 <b>${targetCoin} AI Market Forecast (Diagnostics Needed):</b>\n\n` +
         `⚠️ Aliyun API Key (QWEN_API_KEY) was rejected or is missing from your Render Environment Settings dashboard.\n\n` +
         `<i>Please configure your environment variables to unlock real-time forecasting.</i>`
       );
@@ -373,7 +379,7 @@ Format the output precisely with standard HTML tags. Use the format:
       `• <b>🐳 Monitored Wallets:</b> Triggers real-time connection to Ethereum blockchain to query current balances of high-profile smart wallets.\n` +
       `• <b>📈 Bitget Spot Balances:</b> Authenticates your keys and queries spot assets from your Bitget portfolio.\n` +
       `• <b>📡 /feed:</b> Fetches and displays actual live block transactions parsed and stored inside Supabase database.\n` +
-      `• <b>🔮 /prediction:</b> Gathers AI technical forecasts and support/resistance markers.\n` +
+      `• <b>🔮 /prediction [coin]:</b> Gathers technical AI forecasts for any target asset (e.g. /prediction BTC).\n` +
       `• <b>📊 Sector Rotations:</b> Dispatches AI agents to analyze trending categories.\n` +
       `• <b>💡 Narrative Insights:</b> Synthesizes macro market trends.`
     );

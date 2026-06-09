@@ -21,11 +21,10 @@ export class BlockchainTrackerService {
     'wss://eth.llamarpc.com'
   ];
 
-  // Updated monitored wallet list with real high-balance/active Ethereum smart wallets
+  // Updated watched wallets (Removed Wrapped Ether Contract utility to prevent 0 ETH spam)
   public static readonly WATCHED_WALLETS: TrackedWallet[] = [
     { address: '0x00000000219ab540356cBB839Cbe05303d7705Fa', label: 'Ethereum Deposit Contract', category: 'Institution' },
     { address: '0xAb5801a7D398351b8bE11C439e05C5B3259aec9B', label: 'Vitalik Buterin', category: 'Elite Trader', historicalWinRate: 88, averageRoi: 145 },
-    { address: '0xC02aaA39b223FE8D0A0e5C4F27ead9083C756Cc2', label: 'Wrapped Ether Contract', category: 'Institution' },
     { address: '0xBE0eB53F46cd790Cd13851d5EFf43D12404d33E8', label: 'Binance 8 Wallet', category: 'Institution', historicalWinRate: 75, averageRoi: 62 },
     { address: '0x53d6118667e54f0c707538290fa16e1e8dd489aa', label: 'Amber Group Wallet', category: 'Venture Capital', historicalWinRate: 72, averageRoi: 48 },
     { address: '0x6550cf605d8f6cc3e387bc6a4ca2b07ef94fe3d1', label: 'a16z Crypto', category: 'Venture Capital', historicalWinRate: 69, averageRoi: 95 }
@@ -50,7 +49,7 @@ export class BlockchainTrackerService {
   }
 
   /**
-   * Token Conservation Layer: Only triggers AI completions for highly significant movements (>100 ETH)
+   * Only triggers Qwen completions for high-value on-chain movements
    */
   private static async getSignalExplanation(
     tx: LiveTransaction,
@@ -59,7 +58,6 @@ export class BlockchainTrackerService {
   ): Promise<string> {
     const amountVal = parseFloat(tx.valueEth);
 
-    // Dynamic Threshold Filter: Standard transactions bypass Qwen entirely, saving 95%+ of API credits
     if (amountVal < 100) {
       return `${wallet.label} transferred ${tx.valueEth} ${assetSymbol}. Standard on-chain capital allocation.`;
     }
@@ -97,7 +95,8 @@ Write a concise, one-sentence retail narrative explaining this transaction.`;
 
           const valEth = parseFloat(ethers.formatEther(tx.value));
 
-          if (matchedWallet || valEth >= 100) {
+          // Enforce 50 ETH Minimum Value Floor to prevent dust/0 ETH alert spamming
+          if (valEth >= 50) {
             const matched = matchedWallet || {
               address: tx.from,
               label: `Whale Wallet (${tx.from.substring(0, 6)}...${tx.from.substring(38)})`,
@@ -161,7 +160,8 @@ Write a concise, one-sentence retail narrative explaining this transaction.`;
             const decimals = 18; 
             const formattedAmount = ethers.formatUnits(amountRaw, decimals);
 
-            if (parseFloat(formattedAmount) < 0.1) continue;
+            // Enforce a strict valuation limit to prevent any ERC-20 dust spamming
+            if (parseFloat(formattedAmount) < 10) continue;
 
             const liveTx: LiveTransaction = {
               hash: log.transactionHash,
