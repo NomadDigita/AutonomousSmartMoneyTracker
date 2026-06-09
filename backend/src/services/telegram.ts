@@ -66,6 +66,7 @@ export class TelegramBotService {
         }
       });
 
+      // Bottom persistent reply keyboard bindings
       this.bot.hears('🐳 Monitored Wallets', async (ctx) => {
         await this.handleWhalesRequest(ctx);
       });
@@ -90,6 +91,7 @@ export class TelegramBotService {
         await this.handleHelpRequest(ctx);
       });
 
+      // Persistent Alert Controls (Writes to Supabase)
       this.bot.hears('🔔 Enable Alerts', async (ctx) => {
         if (!ctx.chat?.id) return;
         await SignalStateManager.addSubscriber(ctx.chat.id.toString());
@@ -312,7 +314,7 @@ export class TelegramBotService {
   }
 
   /**
-   * Refactored: Queries all active tokens in a single, unblocked HTTP GET request using DexScreener's Batch API
+   * Refactored: First dispatches the dynamic Bubble Heatmap, then sequentially broadcasts Qwen's macro analysis
    */
   private static async handleSectorsRequest(ctx: any): Promise<void> {
     const loadingMessage = await ctx.replyWithHTML('⏳ <i>Analyzing on-chain sector inflows and dex volume shifts...</i>');
@@ -320,7 +322,6 @@ export class TelegramBotService {
       const searchQuery = 'trending cryptocurrency sectors smart money token accumulation volume dexscreener';
       const webContext = await TavilyService.searchNarrative(searchQuery);
 
-      // Decoupled Contract Addresses: WBTC, WETH, PEPE, ONDO, LINK
       const tokenAddresses = [
         '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599',
         '0xC02aaA39b223FE8D0A0e5C4F27ead9083C756Cc2',
@@ -329,7 +330,6 @@ export class TelegramBotService {
         '0x514910771AF9Ca656af840dff83E8264EcF986CA'
       ].join(',');
 
-      // Single, unified HTTP GET call (Completely unblocked, 100% rate-limit immune)
       const searchRes = await axios.get(`https://api.dexscreener.com/latest/dex/tokens/${tokenAddresses}`, { timeout: 4000 });
       const pairs = searchRes.data?.pairs || [];
       const resolvedTokens = pairs.slice(0, 5).map((p: any) => ({
@@ -351,11 +351,14 @@ Return a structured HTML report with an exact ranked list. Keep it concise, high
         await ctx.telegram.deleteMessage(ctx.chat.id, loadingMessage.message_id).catch(() => {});
       }
       
-      // Dispatch live bubble heatmap photo card
+      // 1. Dispatch the live bubble heatmap photo card cleanly with a safe, short caption
       await ctx.replyWithPhoto(bubbleChartUrl, {
-        caption: `📊 <b>Smart Money Sector Inflows:</b>\n\n${sanitized}`,
+        caption: '📊 <b>Smart Money Active Accumulation Heatmap (USD Vol Weighted)</b>',
         parse_mode: 'HTML'
       });
+
+      // 2. Sequentially broadcast the full, detailed Aliyun Qwen report as a standalone text message (Bypasses the 1024 limit!)
+      await ctx.replyWithHTML(`📊 <b>Smart Money Sector Inflows:</b>\n\n${sanitized}`);
 
     } catch (err: any) {
       if (ctx.chat?.id) {
@@ -366,7 +369,7 @@ Return a structured HTML report with an exact ranked list. Keep it concise, high
   }
 
   /**
-   * Refactored: Queries all active tokens in a single, unblocked HTTP GET request using DexScreener's Batch API
+   * Refactored: First dispatches the dynamic Bubble Heatmap, then sequentially broadcasts Qwen's narrative analysis
    */
   private static async handleNarrativeRequest(ctx: any): Promise<void> {
     const loadingMessage = await ctx.replyWithHTML('⏳ <i>Extracting web narratives and institutional flow patterns...</i>');
@@ -375,13 +378,12 @@ Return a structured HTML report with an exact ranked list. Keep it concise, high
       const webContext = await TavilyService.searchNarrative(searchQuery);
 
       const tokenAddresses = [
-        '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599', // WBTC
-        '0xC02aaA39b223FE8D0A0e5C4F27ead9083C756Cc2', // WETH
-        '0x6982508145454Ce325dDbE47a25d4ec3d2311933', // PEPE
-        '0x514910771AF9Ca656af840dff83E8264EcF986CA'  // LINK
+        '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599',
+        '0xC02aaA39b223FE8D0A0e5C4F27ead9083C756Cc2',
+        '0x6982508145454Ce325dDbE47a25d4ec3d2311933',
+        '0x514910771AF9Ca656af840dff83E8264EcF986CA'
       ].join(',');
 
-      // Single, unified HTTP GET call (Completely unblocked, 100% rate-limit immune)
       const searchRes = await axios.get(`https://api.dexscreener.com/latest/dex/tokens/${tokenAddresses}`, { timeout: 4000 });
       const pairs = searchRes.data?.pairs || [];
       const resolvedTokens = pairs.slice(0, 5).map((p: any) => ({
@@ -403,11 +405,14 @@ Use bullet points, <b>, <i>, and <code> formatting. Do NOT output markdown code 
         await ctx.telegram.deleteMessage(ctx.chat.id, loadingMessage.message_id).catch(() => {});
       }
 
-      // Dispatch live bubble heatmap photo card
+      // 1. Dispatch the live bubble heatmap photo card cleanly with a safe, short caption
       await ctx.replyWithPhoto(bubbleChartUrl, {
-        caption: `💡 <b>AI Narrative Intelligence Feed:</b>\n\n${sanitized}`,
+        caption: '💡 <b>AI Narrative Intelligence Feed (USD Vol Weighted)</b>',
         parse_mode: 'HTML'
       });
+
+      // 2. Sequentially broadcast the full, detailed Aliyun Qwen report as a standalone text message (Bypasses the 1024 limit!)
+      await ctx.replyWithHTML(`💡 <b>AI Narrative Intelligence Feed:</b>\n\n${sanitized}`);
 
     } catch (err: any) {
       if (ctx.chat?.id) {
