@@ -3,6 +3,7 @@ import { SignalStateManager } from '../services/signalState.js';
 import { BitgetService } from '../services/bitget.js';
 import { TavilyService } from '../services/tavily.js';
 import { QwenService } from '../services/qwen.js';
+import { AutonomousResearchAgent } from '../services/researchAgent.js';
 
 const router = Router();
 
@@ -44,7 +45,6 @@ const rateLimiter = (req: Request, res: Response, next: NextFunction) => {
 
 router.use(rateLimiter);
 
-// Refactored to fetch live PostgreSQL histories asynchronously
 router.get('/signals', async (req: Request, res: Response) => {
   try {
     const signals = await SignalStateManager.getSignals();
@@ -102,6 +102,46 @@ You MUST output a strict JSON array of objects with no markdown block formatting
         { name: "Real World Assets (RWA)", weight: 55 },
         { name: "DeFi Protocols", weight: 45 }
       ]
+    });
+  }
+});
+
+// CORE AGENT ROUTE: Retrieves the latest published autonomous report
+router.get('/research', async (req: Request, res: Response) => {
+  try {
+    const report = await AutonomousResearchAgent.getLatestReport();
+    res.status(200).json({
+      success: true,
+      data: report
+    });
+  } catch {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve autonomous research report.'
+    });
+  }
+});
+
+// CORE AGENT ROUTE: Triggers an immediate autonomous AI macro sweep
+router.post('/research/trigger', async (req: Request, res: Response) => {
+  try {
+    const report = await AutonomousResearchAgent.executeAutonomousResearch();
+    if (report) {
+      res.status(200).json({
+        success: true,
+        message: 'Autonomous Research compilation completed successfully.',
+        data: report
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        message: 'Autonomous Research aborted. Insufficient on-chain logs.'
+      });
+    }
+  } catch (err: any) {
+    res.status(500).json({
+      success: false,
+      message: err.message || 'Autonomous sweep failed.'
     });
   }
 });

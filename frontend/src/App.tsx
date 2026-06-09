@@ -15,7 +15,8 @@ import {
   Terminal,
   ChevronRight,
   XCircle,
-  X
+  X,
+  Database
 } from 'lucide-react';
 import { GlassLogo } from './components/GlassLogo';
 
@@ -52,7 +53,13 @@ interface LiveWalletBalance {
   balanceEth: string;
 }
 
-// Configured with your new active Render workspace gateway URL
+interface ResearchReport {
+  title: string;
+  report_text: string;
+  sentiment_rating: string;
+  created_at: string;
+}
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD 
   ? 'https://autonomoussmartmoneytracker-qycg.onrender.com' 
   : 'http://localhost:5000');
@@ -72,12 +79,14 @@ export default function App() {
   const [activeModal, setActiveModal] = useState<'whales' | 'ai' | 'bitget' | null>(null);
 
   const [showWelcome, setShowWelcome] = useState(false);
-
   const [typedText, setTypedText] = useState('');
   const fullWelcomeText = 'Scanning active blocks... Connecting to Aliyun Qwen... Smart wallets identified. Sentinel nodes initialized. System is ready.';
 
   const [modalWalletBalances, setModalWalletBalances] = useState<LiveWalletBalance[]>([]);
   const [isLoadingModalWallets, setIsLoadingModalWallets] = useState(false);
+
+  const [latestReport, setLatestReport] = useState<ResearchReport | null>(null);
+  const [isTriggeringResearch, setIsTriggeringResearch] = useState(false);
 
   const [consecutiveFailures, setConsecutiveFailures] = useState(0);
 
@@ -134,7 +143,6 @@ export default function App() {
         if (bitgetRes.data?.success) {
           setBitgetAssets(bitgetRes.data.data);
           setBitgetError(null);
-          setBitgetError(null);
         }
       } catch (bErr: any) {
         setBitgetError(bErr.response?.data?.message || 'Bitget API key configuration offline.');
@@ -144,6 +152,13 @@ export default function App() {
         const sectorsRes = await axios.get(`${API_BASE_URL}/sectors/weights`);
         if (sectorsRes.data?.success) {
           setSectorWeights(sectorsRes.data.data);
+        }
+      } catch {}
+
+      try {
+        const reportRes = await axios.get(`${API_BASE_URL}/research`);
+        if (reportRes.data?.success && reportRes.data.data) {
+          setLatestReport(reportRes.data.data);
         }
       } catch {}
     };
@@ -162,6 +177,51 @@ export default function App() {
     const interval = setInterval(fetchData, 8000);
     return () => clearInterval(interval);
   }, []);
+
+  const triggerAIResearch = async (promptText: string) => {
+    if (!promptText.trim()) return;
+    setIsSearching(true);
+    setSearchResponse('');
+    
+    try {
+      const response = await axios.get(`https://api.coingecko.com/api/v3/simple/price?ids=ethereum,solana,jupiter-exchange-solana&vs_currencies=usd&include_24hr_change=true`);
+      
+      const ethPrice = response.data.ethereum.usd;
+      const ethChange = response.data.ethereum.usd_24h_change.toFixed(2);
+      const solPrice = response.data.solana.usd;
+      const solChange = response.data.solana.usd_24h_change.toFixed(2);
+
+      setSearchResponse(
+        `🤖 <b>AI Smart Money Copilot Analysis:</b>\n\n` +
+        `Processed query: "<i>${promptText}</i>"\n\n` +
+        `📈 <b>Live Index Metrics Resolved:</b>\n` +
+        `• <b>Ethereum Mainnet:</b> $${ethPrice} (<b>${ethChange}%</b> 24h)\n` +
+        `• <b>Solana Network:</b> $${solPrice} (<b>${solChange}%</b> 24h)\n\n` +
+        `📝 <b>On-Chain Analysis:</b>\n` +
+        `Institutional wallets have shifted 18% of stables into L1 assets over the last 12 hours. ` +
+        `This pattern mimics traditional accumulation cycles preceding near-term volatility expansion. Recommended risk exposure limit: <b>Moderate</b>.`
+      );
+    } catch {
+      setSearchResponse("❌ Web lookup failed. Ensure local network is unrestricted.");
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const triggerAutonomousSweep = async () => {
+    setIsTriggeringResearch(true);
+    try {
+      const response = await axios.post(`${API_BASE_URL}/research/trigger`);
+      if (response.data?.success && response.data.data) {
+        setLatestReport(response.data.data);
+        alert('Autonomous Smart Money Research completed! New report written to Supabase and published.');
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Inference limits reached. Ensure sufficient signals are captured.');
+    } finally {
+      setIsTriggeringResearch(false);
+    }
+  };
 
   const fetchLiveWalletBalances = async () => {
     setIsLoadingModalWallets(true);
@@ -196,36 +256,6 @@ export default function App() {
       fetchLiveWalletBalances();
     }
   }, [activeModal]);
-
-  const triggerAIResearch = async (promptText: string) => {
-    if (!promptText.trim()) return;
-    setIsSearching(true);
-    setSearchResponse('');
-    
-    try {
-      const response = await axios.get('https://api.coingecko.com/api/v3/simple/price?ids=ethereum,solana,jupiter-exchange-solana&vs_currencies=usd&include_24hr_change=true');
-      
-      const ethPrice = response.data.ethereum.usd;
-      const ethChange = response.data.ethereum.usd_24h_change.toFixed(2);
-      const solPrice = response.data.solana.usd;
-      const solChange = response.data.solana.usd_24h_change.toFixed(2);
-
-      setSearchResponse(
-        `🤖 <b>AI Smart Money Copilot Analysis:</b>\n\n` +
-        `Processed query: "<i>${promptText}</i>"\n\n` +
-        `📈 <b>Live Index Metrics Resolved:</b>\n` +
-        `• <b>Ethereum Mainnet:</b> $${ethPrice} (<b>${ethChange}%</b> 24h)\n` +
-        `• <b>Solana Network:</b> $${solPrice} (<b>${solChange}%</b> 24h)\n\n` +
-        `📝 <b>On-Chain Analysis:</b>\n` +
-        `Institutional wallets have shifted 18% of stables into L1 assets over the last 12 hours. ` +
-        `This pattern mimics traditional accumulation cycles preceding near-term volatility expansion. Recommended risk exposure limit: <b>Moderate</b>.`
-      );
-    } catch {
-      setSearchResponse("❌ Web lookup failed. Ensure local network is unrestricted.");
-    } finally {
-      setIsSearching(false);
-    }
-  };
 
   const formatUserIdentity = (): string => {
     if (!user) return '';
@@ -309,7 +339,7 @@ export default function App() {
       {/* Main Container */}
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 z-10">
 
-        {/* WELCOME HERO CARD */}
+        {/* APPLE-STANDARD TRANSLUCENT FROSTED SLATE WELCOME HERO CARD */}
         <div className="bg-slate-950/50 backdrop-blur-xl rounded-3xl p-6 mb-8 relative overflow-hidden border border-white/12 shadow-[0_8px_32px_0_rgba(0,0,0,0.4)] animate-float-medium">
           <div className="absolute top-0 right-0 w-48 h-48 bg-cyan-500/5 rounded-full blur-3xl pointer-events-none" />
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
@@ -495,32 +525,83 @@ export default function App() {
 
             {/* TAB CONTENT: Intelligence / Sector Rotations */}
             {activeTab === 'intelligence' && (
-              <div className="bg-slate-950/45 backdrop-blur-xl rounded-3xl p-6 space-y-6 border border-white/12">
-                <div>
-                  <h3 className="text-lg font-bold text-white mb-2">Crypto Sector Accumulation Weight</h3>
-                  <p className="text-sm text-gray-400">Calculated dynamic weighting of capital rotation entering target crypto categories over a 7-day period.</p>
+              <div className="space-y-6">
+                <div className="bg-slate-950/45 backdrop-blur-xl rounded-3xl p-6 space-y-6 border border-white/12">
+                  <div>
+                    <h3 className="text-lg font-bold text-white mb-2">Crypto Sector Accumulation Weight</h3>
+                    <p className="text-sm text-gray-400">Calculated dynamic weighting of capital rotation entering target crypto categories over a 7-day period.</p>
+                  </div>
+
+                  <div className="space-y-4">
+                    {sectorWeights.length === 0 ? (
+                      <div className="text-center py-4 text-xs text-gray-500">
+                        Querying live AI sector metrics...
+                      </div>
+                    ) : (
+                      sectorWeights.map((sector, idx) => (
+                        <div key={idx}>
+                          <div className="flex justify-between text-sm mb-1">
+                            <span className="text-gray-300 font-medium flex items-center gap-1.5">
+                              <Layers className="w-4 h-4 text-cyan-400" />
+                              {sector.name}
+                            </span>
+                            <span className="text-cyan-400 font-bold">{sector.weight}% Accumulation</span>
+                          </div>
+                          <div className="w-full bg-white/5 h-2.5 rounded-full overflow-hidden border border-white/5">
+                            <div className="bg-gradient-to-r from-cyan-500 to-blue-500 h-full rounded-full" style={{ width: `${sector.weight}%` }} />
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
 
-                <div className="space-y-4">
-                  {sectorWeights.length === 0 ? (
-                    <div className="text-center py-4 text-xs text-gray-500">
-                      Querying live AI sector metrics...
+                {/* AI Research Desk Persistent Panel */}
+                <div className="bg-slate-950/45 backdrop-blur-xl rounded-3xl p-6 border border-white/12 space-y-4 relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/5 rounded-full blur-2xl pointer-events-none" />
+                  
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-white/5 pb-4">
+                    <div className="flex items-center gap-3">
+                      <span className="p-2.5 bg-cyan-500/10 rounded-2xl text-cyan-400 border border-cyan-500/20">
+                        <Database className="w-5 h-5" />
+                      </span>
+                      <div>
+                        <h3 className="text-lg font-bold text-white">AI Quantitative Research Desk</h3>
+                        <p className="text-xs text-gray-400">Bloomberg-standard macro reports published autonomously</p>
+                      </div>
+                    </div>
+
+                    <button 
+                      onClick={triggerAutonomousSweep}
+                      disabled={isTriggeringResearch}
+                      className="px-4 py-2 bg-white/5 hover:bg-white/10 text-cyan-400 hover:text-white text-xs font-semibold rounded-xl border border-white/5 hover:border-cyan-500/20 transition-all cursor-pointer disabled:animate-pulse"
+                    >
+                      {isTriggeringResearch ? '⚡ Compiling...' : '⚡ Trigger AI Sweep'}
+                    </button>
+                  </div>
+
+                  {latestReport ? (
+                    <div className="space-y-4">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <h4 className="text-base font-bold text-white tracking-tight">{latestReport.title}</h4>
+                        <span className="text-xs font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20">
+                          Sentiment: {latestReport.sentiment_rating}
+                        </span>
+                      </div>
+                      
+                      <div 
+                        className="text-sm text-gray-300 leading-relaxed space-y-2 border-l-2 border-cyan-500/20 pl-4 py-1 italic"
+                        dangerouslySetInnerHTML={{ __html: latestReport.report_text }}
+                      />
+
+                      <div className="text-[10px] text-gray-500">
+                        Report Published Autonomously: {new Date(latestReport.created_at).toLocaleString()}
+                      </div>
                     </div>
                   ) : (
-                    sectorWeights.map((sector, idx) => (
-                      <div key={idx}>
-                        <div className="flex justify-between text-sm mb-1">
-                          <span className="text-gray-300 font-medium flex items-center gap-1.5">
-                            <Layers className="w-4 h-4 text-cyan-400" />
-                            {sector.name}
-                          </span>
-                          <span className="text-cyan-400 font-bold">{sector.weight}% Accumulation</span>
-                        </div>
-                        <div className="w-full bg-white/5 h-2.5 rounded-full overflow-hidden border border-white/5">
-                          <div className="bg-gradient-to-r from-cyan-500 to-blue-500 h-full rounded-full" style={{ width: `${sector.weight}%` }} />
-                        </div>
-                      </div>
-                    ))
+                    <div className="text-center py-6 text-xs text-gray-500">
+                      No reports compiled on Supabase yet. Click \"Trigger AI Sweep\" above to compile your platform's first autonomous newsletter!
+                    </div>
                   )}
                 </div>
               </div>
