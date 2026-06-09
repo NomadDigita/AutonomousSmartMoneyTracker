@@ -59,13 +59,14 @@ export class TelegramBotService {
               ['💡 Narrative Insights', '📊 Sector Rotations'],
               ['🔔 Enable Alerts', '🔕 Disable Alerts'],
               ['⚡ System Status', 'ℹ️ Help Guide']
-            ]).resize().persistent()
+            ]).resize()
           );
         } catch (err: any) {
           console.error('[Telegram] start command failed:', err.message);
         }
       });
 
+      // Bottom persistent reply keyboard bindings
       this.bot.hears('🐳 Monitored Wallets', async (ctx) => {
         await this.handleWhalesRequest(ctx);
       });
@@ -90,6 +91,7 @@ export class TelegramBotService {
         await this.handleHelpRequest(ctx);
       });
 
+      // Persistent Alert Controls (Writes to Supabase)
       this.bot.hears('🔔 Enable Alerts', async (ctx) => {
         if (!ctx.chat?.id) return;
         await SignalStateManager.addSubscriber(ctx.chat.id.toString());
@@ -413,7 +415,9 @@ Format the output precisely with standard HTML tags. Use the format:
     if (this.bot) {
       try {
         await this.bot.telegram.sendMessage(chatId, alertMessage, { parse_mode: 'HTML' });
-      } catch {}
+      } catch (err: any) {
+        console.error(`[Telegram Broadcast Error] Failed to send message to ${chatId}:`, err.message);
+      }
     }
   }
 }

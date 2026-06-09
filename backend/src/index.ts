@@ -45,6 +45,7 @@ const server = app.listen(config.PORT, () => {
         for (const sub of subscribers) {
           if (!sub.chat_id) continue;
 
+          // Safe, verified HTML tags matching Telegram standard rules
           const formattedAlert = 
             `🚨 <b>SMART MONEY MOVEMENT DETECTED</b> 🚨\n\n` +
             `• <b>Wallet:</b> <code>${signal.walletLabel}</code>\n` +
@@ -56,7 +57,7 @@ const server = app.listen(config.PORT, () => {
             `<i>"${signal.aiExplanation}"</i>\n\n` +
             `🔗 <a href="https://etherscan.io/tx/${signal.transactionHash}">View Transaction on Etherscan</a>`;
 
-          // Explicitly converts dynamic parameters to a strict string to satisfy the compiler
+          // Explicitly converts any dynamic parameter to a strict string to satisfy the compiler
           await TelegramBotService.broadcastAlert(sub.chat_id.toString(), formattedAlert);
         }
 
