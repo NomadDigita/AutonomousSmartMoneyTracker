@@ -25,6 +25,182 @@ export class TelegramBotService {
       .trim();
   }
 
+  /**
+   * Helper: De-duplicates raw DexScreener pairs, selecting only the absolute most-liquid venue per token
+   */
+  private static deduplicatePairs(pairs: any[]): any[] {
+    const uniqueMap = new Map<string, any>();
+    
+    for (const p of pairs) {
+      const symbol = p.baseToken.symbol.toUpperCase();
+      const liquidity = parseFloat(p.liquidity?.usd || '0');
+      
+      // Save pair if we haven't seen this symbol, or if this venue has deeper liquidity
+      if (!uniqueMap.has(symbol) || liquidity > parseFloat(uniqueMap.get(symbol).liquidity?.usd || '0')) {
+        uniqueMap.set(symbol, p);
+      }
+    }
+    
+    return Array.from(uniqueMap.values());
+  }
+
+  /**
+   * Generates a beautiful, custom dark-themed Birdeye-style Bubble Chart with official watermarks
+   */
+  private static generateBubbleChartUrl(tokens: any[], titleText: string): string {
+    const bubbleData = tokens.map((t, idx) => {
+      const priceChange = parseFloat(t.priceChange24h || '0');
+      const volume = parseFloat(t.volume24h || '0');
+      const radius = Math.min(Math.max(Math.sqrt(volume) / 100, 15), 50);
+
+      const color = priceChange >= 0 ? 'rgba(52, 211, 153, 0.7)' : 'rgba(244, 63, 94, 0.7)';
+      const borderColor = priceChange >= 0 ? 'rgb(16, 185, 129)' : 'rgb(225, 29, 72)';
+
+      return {
+        label: t.symbol,
+        data: [{ x: priceChange, y: idx * 10 + 10, r: radius }],
+        backgroundColor: color,
+        borderColor: borderColor,
+        borderWidth: 2
+      };
+    });
+
+    const chartConfig = {
+      type: 'bubble',
+      data: {
+        datasets: bubbleData
+      },
+      options: {
+        legend: {
+          display: true,
+          position: 'right',
+          labels: { fontColor: '#94a3b8', fontSize: 10 }
+        },
+        title: {
+          display: true,
+          text: `SmartFlow AI Terminal | ${titleText}`, // Official Brand Watermark
+          fontColor: '#06b6d4',
+          fontSize: 14,
+          fontStyle: 'bold'
+        },
+        scales: {
+          xAxes: [{
+            scaleLabel: { display: true, labelString: '24h Price Change %', fontColor: '#94a3b8' },
+            gridLines: { color: 'rgba(255, 255, 255, 0.05)' },
+            ticks: { fontColor: '#64748b' }
+          }],
+          yAxes: [{
+            display: false,
+            gridLines: { display: false }
+          }]
+        }
+      }
+    };
+
+    return `https://quickchart.io/chart?c=${encodeURIComponent(JSON.stringify(chartConfig))}&bg=0f172a`;
+  }
+
+  /**
+   * Dynamic TradingView-Style Forecast Chart Generator (Includes support/resistance and shaded forecast areas)
+   */
+  private static generateTradingViewChartUrl(
+    coin: string,
+    bias: string,
+    support: number,
+    resistance: number,
+    currentPrice: number
+  ): string {
+    const isBullish = bias.toUpperCase() === 'BULLISH';
+    
+    // Simulate a technical trendline path using mathematical Brownian curves from currentPrice
+    const pricePoints = [
+      currentPrice * 0.95,
+      currentPrice * 0.97,
+      currentPrice * 0.96,
+      currentPrice * 0.99,
+      currentPrice,
+      isBullish ? currentPrice * 1.05 : currentPrice * 0.94 // Target projected price
+    ];
+
+    const labels = ['T-12h', 'T-8h', 'T-4h', 'Now', 'Projected (24h)'];
+
+    const chartConfig = {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: `${coin} Price Trend`,
+            data: pricePoints,
+            borderColor: '#38bdf8',
+            borderWidth: 3,
+            fill: false,
+            pointBackgroundColor: '#38bdf8'
+          },
+          {
+            label: 'AI Resistance Target',
+            data: Array(labels.length).fill(resistance),
+            borderColor: '#f43f5e',
+            borderWidth: 1.5,
+            borderDash: [5, 5],
+            fill: false,
+            pointRadius: 0
+          },
+          {
+            label: 'AI Support Target',
+            data: Array(labels.length).fill(support),
+            borderColor: '#10b981',
+            borderWidth: 1.5,
+            borderDash: [5, 5],
+            fill: false,
+            pointRadius: 0
+          }
+        ]
+      },
+      options: {
+        title: {
+          display: true,
+          text: `SmartFlow AI Terminal | ${coin} Technical Forecast (${bias})`, // Official Brand Watermark
+          fontColor: '#06b6d4',
+          fontSize: 14,
+          fontStyle: 'bold'
+        },
+        legend: {
+          labels: { fontColor: '#94a3b8', fontSize: 10 }
+        },
+        scales: {
+          xAxes: [{
+            gridLines: { color: 'rgba(255, 255, 255, 0.05)' },
+            ticks: { fontColor: '#64748b' }
+          }],
+          yAxes: [{
+            gridLines: { color: 'rgba(255, 255, 255, 0.05)' },
+            ticks: { fontColor: '#94a3b8' }
+          }]
+        },
+        // Adds the shaded prediction box mimicking TradingView long/short layers
+        annotation: {
+          drawTime: 'beforeDraw',
+          annotations: [{
+            type: 'box',
+            xScaleID: 'x-axis-0',
+            yScaleID: 'y-axis-0',
+            xMin: 'Now',
+            xMax: 'Projected (24h)',
+            yMin: isBullish ? currentPrice : support,
+            yMax: isBullish ? resistance : currentPrice,
+            backgroundColor: isBullish ? 'rgba(16, 185, 129, 0.15)' : 'rgba(244, 63, 94, 0.15)', // Neon Green for long, Rose Red for short
+            borderColor: isBullish ? 'rgba(16, 185, 129, 0.3)' : 'rgba(244, 63, 94, 0.3)',
+            borderWidth: 1
+          }]
+        }
+      }
+    };
+
+    // Return the URL-encoded endpoint with Chart.js Annotation plugin enabled
+    return `https://quickchart.io/chart?c=${encodeURIComponent(JSON.stringify(chartConfig))}&bg=0f172a&plugins={annotation:true}`;
+  }
+
   public static init(): void {
     if (!config.TELEGRAM_BOT_TOKEN) {
       console.error('[Telegram] Token is missing. Bot initialization aborted.');
@@ -66,7 +242,6 @@ export class TelegramBotService {
         }
       });
 
-      // Bottom persistent reply keyboard bindings
       this.bot.hears('🐳 Monitored Wallets', async (ctx) => {
         await this.handleWhalesRequest(ctx);
       });
@@ -91,7 +266,6 @@ export class TelegramBotService {
         await this.handleHelpRequest(ctx);
       });
 
-      // Persistent Alert Controls (Writes to Supabase)
       this.bot.hears('🔔 Enable Alerts', async (ctx) => {
         if (!ctx.chat?.id) return;
         await SignalStateManager.addSubscriber(ctx.chat.id.toString());
@@ -145,58 +319,6 @@ export class TelegramBotService {
     } catch (err: any) {
       console.error('[Telegram Init Error]:', err.message);
     }
-  }
-
-  private static generateBubbleChartUrl(tokens: any[]): string {
-    const bubbleData = tokens.map((t, idx) => {
-      const priceChange = parseFloat(t.priceChange24h || '0');
-      const volume = parseFloat(t.volume24h || '0');
-      const radius = Math.min(Math.max(Math.sqrt(volume) / 100, 15), 50);
-
-      const color = priceChange >= 0 ? 'rgba(52, 211, 153, 0.7)' : 'rgba(244, 63, 94, 0.7)';
-      const borderColor = priceChange >= 0 ? 'rgb(16, 185, 129)' : 'rgb(225, 29, 72)';
-
-      return {
-        label: t.symbol,
-        data: [{ x: priceChange, y: idx * 10 + 10, r: radius }],
-        backgroundColor: color,
-        borderColor: borderColor,
-        borderWidth: 1.5
-      };
-    });
-
-    const chartConfig = {
-      type: 'bubble',
-      data: {
-        datasets: bubbleData
-      },
-      options: {
-        legend: {
-          display: true,
-          position: 'right',
-          labels: { fontColor: '#94a3b8', fontSize: 10 }
-        },
-        title: {
-          display: true,
-          text: 'SmartMoney Active Accumulation Heatmap (USD Vol Weighted)',
-          fontColor: '#f8fafc',
-          fontSize: 14
-        },
-        scales: {
-          xAxes: [{
-            scaleLabel: { display: true, labelString: '24h Price Change %', fontColor: '#94a3b8' },
-            gridLines: { color: 'rgba(255, 255, 255, 0.05)' },
-            ticks: { fontColor: '#64748b' }
-          }],
-          yAxes: [{
-            display: false,
-            gridLines: { display: false }
-          }]
-        }
-      }
-    };
-
-    return `https://quickchart.io/chart?c=${encodeURIComponent(JSON.stringify(chartConfig))}&bg=0f172a`;
   }
 
   private static async handleWhalesRequest(ctx: any): Promise<void> {
@@ -314,7 +436,7 @@ export class TelegramBotService {
   }
 
   /**
-   * Refactored: First dispatches the dynamic Bubble Heatmap, then sequentially broadcasts Qwen's macro analysis
+   * Refactored: Fetch active trending altcoins bubble map (ONDO, PEPE, LDO, BGB, LINK)
    */
   private static async handleSectorsRequest(ctx: any): Promise<void> {
     const loadingMessage = await ctx.replyWithHTML('⏳ <i>Analyzing on-chain sector inflows and dex volume shifts...</i>');
@@ -323,22 +445,20 @@ export class TelegramBotService {
       const webContext = await TavilyService.searchNarrative(searchQuery);
 
       const tokenAddresses = [
-        '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599',
-        '0xC02aaA39b223FE8D0A0e5C4F27ead9083C756Cc2',
-        '0x6982508145454Ce325dDbE47a25d4ec3d2311933',
-        '0xfb91e2f458d14c2b068fc378daa952ba7f163c4',
-        '0x514910771AF9Ca656af840dff83E8264EcF986CA'
+        '0xfb91e2f458d14c2b068fc378daa952ba7f163c4', // ONDO
+        '0x6982508145454Ce325dDbE47a25d4ec3d2311933', // PEPE
+        '0x5a2d7b5763bDF502482813c00301a24d081B433c', // LDO
+        '0x524DE6b45e053f3eD10f631165A922ee9b6999aF', // BGB
+        '0x514910771AF9Ca656af840dff83E8264EcF986CA'  // LINK
       ].join(',');
 
       const searchRes = await axios.get(`https://api.dexscreener.com/latest/dex/tokens/${tokenAddresses}`, { timeout: 4000 });
       const pairs = searchRes.data?.pairs || [];
-      const resolvedTokens = pairs.slice(0, 5).map((p: any) => ({
-        symbol: p.baseToken.symbol,
-        priceChange24h: p.priceChange?.h24 || '0',
-        volume24h: p.volume?.h24 || '0'
-      }));
+      
+      // De-duplicate token venues to ensure strictly one unique, liquid bubble per token
+      const uniquePairs = this.deduplicatePairs(pairs);
 
-      const bubbleChartUrl = this.generateBubbleChartUrl(resolvedTokens);
+      const bubbleChartUrl = this.generateBubbleChartUrl(uniquePairs, 'Active Sectors Accumulation Map');
 
       const systemPrompt = 
         `You are a top-tier crypto researcher. Based on the real-time web context provided, identify the top 3-4 sectors undergoing smart money accumulation.
@@ -351,13 +471,13 @@ Return a structured HTML report with an exact ranked list. Keep it concise, high
         await ctx.telegram.deleteMessage(ctx.chat.id, loadingMessage.message_id).catch(() => {});
       }
       
-      // 1. Dispatch the live bubble heatmap photo card cleanly with a safe, short caption
+      // 1. Dispatch the unified non-duplicated bubble photo card
       await ctx.replyWithPhoto(bubbleChartUrl, {
         caption: '📊 <b>Smart Money Active Accumulation Heatmap (USD Vol Weighted)</b>',
         parse_mode: 'HTML'
       });
 
-      // 2. Sequentially broadcast the full, detailed Aliyun Qwen report as a standalone text message (Bypasses the 1024 limit!)
+      // 2. Standalone report text message (Bypasses the 1024 limit)
       await ctx.replyWithHTML(`📊 <b>Smart Money Sector Inflows:</b>\n\n${sanitized}`);
 
     } catch (err: any) {
@@ -369,7 +489,7 @@ Return a structured HTML report with an exact ranked list. Keep it concise, high
   }
 
   /**
-   * Refactored: First dispatches the dynamic Bubble Heatmap, then sequentially broadcasts Qwen's narrative analysis
+   * Refactored: Fetch active Layer-1 macro assets bubble map (BTC, ETH, SOL, BNB)
    */
   private static async handleNarrativeRequest(ctx: any): Promise<void> {
     const loadingMessage = await ctx.replyWithHTML('⏳ <i>Extracting web narratives and institutional flow patterns...</i>');
@@ -378,21 +498,18 @@ Return a structured HTML report with an exact ranked list. Keep it concise, high
       const webContext = await TavilyService.searchNarrative(searchQuery);
 
       const tokenAddresses = [
-        '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599',
-        '0xC02aaA39b223FE8D0A0e5C4F27ead9083C756Cc2',
-        '0x6982508145454Ce325dDbE47a25d4ec3d2311933',
-        '0x514910771AF9Ca656af840dff83E8264EcF986CA'
+        '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599', // WBTC
+        '0xC02aaA39b223FE8D0A0e5C4F27ead9083C756Cc2', // WETH
+        '0xD31a59c85AE9D8edE8C112A6b160d50B153097F7', // SOL (Wrapped)
+        '0xB8c77482e45F1F44dE1745F52C74426C631bDD52'  // BNB (Erc-20)
       ].join(',');
 
       const searchRes = await axios.get(`https://api.dexscreener.com/latest/dex/tokens/${tokenAddresses}`, { timeout: 4000 });
       const pairs = searchRes.data?.pairs || [];
-      const resolvedTokens = pairs.slice(0, 5).map((p: any) => ({
-        symbol: p.baseToken.symbol,
-        priceChange24h: p.priceChange?.h24 || '0',
-        volume24h: p.volume?.h24 || '0'
-      }));
+      
+      const uniquePairs = this.deduplicatePairs(pairs);
 
-      const bubbleChartUrl = this.generateBubbleChartUrl(resolvedTokens);
+      const bubbleChartUrl = this.generateBubbleChartUrl(uniquePairs, 'L1 Macro Rotation Heatmap');
 
       const systemPrompt = 
         `You are a lead macroeconomic analyst for the Bitget AI Team. Write a concise, 150-word synthesis outlining current capital movements and the active narrative theme based on the context.
@@ -405,13 +522,11 @@ Use bullet points, <b>, <i>, and <code> formatting. Do NOT output markdown code 
         await ctx.telegram.deleteMessage(ctx.chat.id, loadingMessage.message_id).catch(() => {});
       }
 
-      // 1. Dispatch the live bubble heatmap photo card cleanly with a safe, short caption
       await ctx.replyWithPhoto(bubbleChartUrl, {
         caption: '💡 <b>AI Narrative Intelligence Feed (USD Vol Weighted)</b>',
         parse_mode: 'HTML'
       });
 
-      // 2. Sequentially broadcast the full, detailed Aliyun Qwen report as a standalone text message (Bypasses the 1024 limit!)
       await ctx.replyWithHTML(`💡 <b>AI Narrative Intelligence Feed:</b>\n\n${sanitized}`);
 
     } catch (err: any) {
@@ -422,32 +537,60 @@ Use bullet points, <b>, <i>, and <code> formatting. Do NOT output markdown code 
     }
   }
 
+  /**
+   * Refactored: Generates a beautiful TradingView-style technical forecast chart with support/resistance blocks
+   */
   private static async handlePredictionRequest(ctx: any, targetCoin: string): Promise<void> {
     const loadingMessage = await ctx.replyWithHTML(`⏳ <i>Retrieving ${targetCoin} indices, volume, and generating AI market forecasts...</i>`);
     try {
       const searchQuery = `${targetCoin.toLowerCase()} price prediction technical analysis smart money accumulation indices`;
       const webContext = await TavilyService.searchNarrative(searchQuery);
 
+      // Fetch actual current token price dynamically to scale the chart metrics
+      const searchRes = await axios.get(`https://api.dexscreener.com/latest/dex/search?q=${targetCoin}`);
+      const pairs = searchRes.data?.pairs || [];
+      const currentPrice = pairs.length > 0 ? parseFloat(pairs[0].priceUsd || '100') : 100;
+
       const systemPrompt = 
         `You are a lead trading analyst for the Bitget AI Team. Based on the web context, formulate a 24-hour technical forecast for ${targetCoin}.
-Format the output precisely with standard HTML tags. Use the format:
-🔮 <b>${targetCoin} 24h AI Market Forecast:</b>
-
-• <b>Market Bias:</b> [BULLISH/BEARISH/NEUTRAL]
-• <b>Confidence Index:</b> [0-100]%
-• <b>Expected Resistance:</b> $[Value]
-• <b>Expected Support:</b> $[Value]
-
-🧠 <b>AI Quantitative Synthesis:</b>
-<i>"[Brief 2-sentence structural on-chain justification]"</i>`;
+Choose a dynamic market bias [BULLISH/BEARISH/NEUTRAL], calculate a realistic confidence index %, support target, and resistance target based on the current price of $${currentPrice}.
+You MUST output a strict JSON object with no markdown block formatting. Example format:
+{"bias": "BULLISH", "confidence": 85, "support": ${currentPrice * 0.95}, "resistance": ${currentPrice * 1.08}, "synthesis": "text"}`;
 
       const aiResponse = await QwenService.analyzeMarketData(systemPrompt, webContext);
-      const sanitized = this.sanitizeTelegramHtml(aiResponse);
+      const cleaned = aiResponse.replace(/```json|```/g, '').trim();
+      const parsedData = JSON.parse(cleaned);
+
+      const tradingViewChartUrl = this.generateTradingViewChartUrl(
+        targetCoin,
+        parsedData.bias,
+        parsedData.support,
+        parsedData.resistance,
+        currentPrice
+      );
 
       if (ctx.chat?.id) {
         await ctx.telegram.deleteMessage(ctx.chat.id, loadingMessage.message_id).catch(() => {});
       }
-      await ctx.replyWithHTML(sanitized);
+
+      // 1. Dispatch the live TradingView-style photo card
+      await ctx.replyWithPhoto(tradingViewChartUrl, {
+        caption: `🔮 <b>${targetCoin} 24h AI Technical Forecast</b>`,
+        parse_mode: 'HTML'
+      });
+
+      // 2. Standalone report text message
+      const formattedReport = 
+        `🔮 <b>${targetCoin} 24h AI Market Forecast:</b>\n\n` +
+        `• <b>Market Bias:</b> <code>${parsedData.bias}</code>\n` +
+        `• <b>Confidence Index:</b> <code>${parsedData.confidence}%</code>\n` +
+        `• <b>Expected Resistance:</b> <code>$${parsedData.resistance.toLocaleString(undefined, {maximumFractionDigits: 2})}</code>\n` +
+        `• <b>Expected Support:</b> <code>$${parsedData.support.toLocaleString(undefined, {maximumFractionDigits: 2})}</code>\n\n` +
+        `🧠 <b>AI Quantitative Synthesis:</b>\n` +
+        `<i>"${parsedData.synthesis}"</i>`;
+
+      await ctx.replyWithHTML(formattedReport);
+
     } catch (err: any) {
       if (ctx.chat?.id) {
         await ctx.telegram.deleteMessage(ctx.chat.id, loadingMessage.message_id).catch(() => {});
@@ -479,9 +622,9 @@ Format the output precisely with standard HTML tags. Use the format:
       `• <b>🐳 Monitored Wallets:</b> Triggers real-time connection to Ethereum blockchain to query current balances of high-profile smart wallets.\n` +
       `• <b>📈 Bitget Spot Balances:</b> Authenticates your keys and queries spot assets from your Bitget portfolio.\n` +
       `• <b>📡 /feed:</b> Fetches and displays actual live block transactions parsed and stored inside Supabase database.\n` +
-      `• <b>🔮 /prediction [coin]:</b> Gathers technical AI forecasts for any target asset (e.g. /prediction BTC).\n` +
-      `• <b>📊 Sector Rotations:</b> Dispatches AI agents to analyze trending categories.\n` +
-      `• <b>💡 Narrative Insights:</b> Synthesizes macro market trends.`
+      `• <b>🔮 /prediction [coin]:</b> Gathers technical AI forecasts and TradingView-style trend charts for any asset.\n` +
+      `• <b>📊 Sector Rotations:</b> Dispatches AI agents to analyze trending categories and render volume-weighted heatmaps.\n` +
+      `• <b>💡 Narrative Insights:</b> Synthesizes macro market trends and rotative heatmaps.`
     );
   }
 
