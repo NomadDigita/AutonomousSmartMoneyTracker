@@ -66,7 +66,6 @@ export class TelegramBotService {
         }
       });
 
-      // Bottom persistent reply keyboard bindings
       this.bot.hears('🐳 Monitored Wallets', async (ctx) => {
         await this.handleWhalesRequest(ctx);
       });
@@ -91,7 +90,6 @@ export class TelegramBotService {
         await this.handleHelpRequest(ctx);
       });
 
-      // Persistent Alert Controls (Writes to Supabase)
       this.bot.hears('🔔 Enable Alerts', async (ctx) => {
         if (!ctx.chat?.id) return;
         await SignalStateManager.addSubscriber(ctx.chat.id.toString());
@@ -137,7 +135,7 @@ export class TelegramBotService {
 
       this.bot.launch()
         .then(() => console.log('[Telegram] Persistent Keyboard Bot online.'))
-        .catch(() => console.warn('[Telegram Warning] Handshake deferred. Retrying...'));
+        .catch(() => console.warn('[Telegram Warning] Handshake deferred. Reconnecting...'));
 
     } catch (err: any) {
       console.error('[Telegram Init Error]:', err.message);
@@ -418,4 +416,4 @@ Format the output precisely with standard HTML tags. Use the format:
       } catch {}
     }
   }
-} // Correct final closing brace of class
+}

@@ -52,8 +52,9 @@ interface LiveWalletBalance {
   balanceEth: string;
 }
 
+// Configured with your new active Render workspace gateway URL
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD 
-  ? 'https://autonomous-smart-money-tracker.onrender.com' 
+  ? 'https://autonomoussmartmoneytracker-qycg.onrender.com' 
   : 'http://localhost:5000');
 
 export default function App() {
@@ -70,10 +71,8 @@ export default function App() {
 
   const [activeModal, setActiveModal] = useState<'whales' | 'ai' | 'bitget' | null>(null);
 
-  // Welcome Intro Card state controller
   const [showWelcome, setShowWelcome] = useState(false);
 
-  // Animated Typing Text states
   const [typedText, setTypedText] = useState('');
   const fullWelcomeText = 'Scanning active blocks... Connecting to Aliyun Qwen... Smart wallets identified. Sentinel nodes initialized. System is ready.';
 
@@ -84,7 +83,6 @@ export default function App() {
 
   const { login, logout, authenticated, user, ready } = usePrivy();
 
-  // Welcome Persistence & Typing Animation Effect
   useEffect(() => {
     const welcomeSeen = localStorage.getItem('smartflow_welcome_seen');
     if (!welcomeSeen) {
@@ -98,7 +96,7 @@ export default function App() {
       if (index >= fullWelcomeText.length) {
         clearInterval(typingInterval);
       }
-    }, 45); // Speed of the Apple-standard text writer effect
+    }, 45);
 
     return () => clearInterval(typingInterval);
   }, []);
@@ -533,7 +531,7 @@ export default function App() {
             
             {/* ROTATING LIQUID GLOWING BORDER AROUND ACTIVE CARD */}
             <div className="relative p-[1px] rounded-3xl overflow-hidden bg-gradient-to-r from-cyan-500 via-indigo-500 to-blue-500 animate-pulse">
-              <div className="bg-slate-950/95 backdrop-blur-xl rounded-[23px] p-6 space-y-4">
+              <div className="bg-[#030712]/95 backdrop-blur-xl rounded-[23px] p-6 space-y-4">
                 <div className="flex items-center gap-3">
                   <span className="p-2 bg-cyan-500/10 rounded-xl text-cyan-400 border border-cyan-500/20">
                     <Terminal className="w-5 h-5" />
@@ -653,7 +651,6 @@ export default function App() {
           <div className="bg-slate-950/65 backdrop-blur-3xl max-w-xl w-full rounded-3xl p-8 relative overflow-hidden border border-white/12 shadow-[0_20px_50px_rgba(0,0,0,0.6)] flex flex-col items-center text-center space-y-6 animate-float-medium">
             <div className="absolute top-0 right-0 w-64 h-64 bg-cyan-500/5 rounded-full blur-3xl pointer-events-none" />
             
-            {/* Visual Glass logo */}
             <GlassLogo />
 
             <div className="space-y-2">
@@ -665,7 +662,6 @@ export default function App() {
               </p>
             </div>
 
-            {/* Apple CSS-simulated active typing terminal area */}
             <div className="w-full bg-[#030712]/80 border border-white/5 rounded-2xl p-4 min-h-[90px] font-mono text-left text-xs leading-relaxed text-gray-400 shadow-inner relative overflow-hidden">
               <span className="text-emerald-400 mr-1.5 font-bold">&gt;_</span>
               <span>{typedText}</span>

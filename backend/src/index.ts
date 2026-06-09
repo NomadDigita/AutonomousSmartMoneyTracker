@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import axios from 'axios';
 import { config } from './config/index.js';
 import { apiRouter } from './routes/api.js';
 import { TelegramBotService } from './services/telegram.js';
@@ -55,13 +56,24 @@ const server = app.listen(config.PORT, () => {
             `<i>"${signal.aiExplanation}"</i>\n\n` +
             `🔗 <a href="https://etherscan.io/tx/${signal.transactionHash}">View Transaction on Etherscan</a>`;
 
-          // Explicitly converts any dynamic parameter to a strict string to satisfy the compiler
+          // Explicitly converts dynamic parameters to a strict string to satisfy the compiler
           await TelegramBotService.broadcastAlert(sub.chat_id.toString(), formattedAlert);
         }
 
         console.log(`[Scanner Signal] Captured real transaction from ${signal.walletLabel}.`);
       }
     });
+
+    // 3. Real-Time Self-Ping Keep-Alive Loop: Fires every 5 minutes to prevent Render's free tier container from sleeping
+    setInterval(async () => {
+      try {
+        const selfUrl = 'https://autonomoussmartmoneytracker-qycg.onrender.com/health';
+        await axios.get(selfUrl);
+        console.log('[Keep-Alive] Self-ping dispatched successfully to Render node.');
+      } catch (err: any) {
+        console.warn('[Keep-Alive Warning] Self-ping skipped:', err.message);
+      }
+    }, 5 * 60 * 1000); // 5 minutes
 
   } catch (err: any) {
     console.error('[Initialization Error]:', err.message);
