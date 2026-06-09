@@ -21,6 +21,7 @@ interface Config {
   SOLANA_MAINNET_RPC: string;
   SUPABASE_URL: string;
   SUPABASE_KEY: string;
+  MIN_ALERT_USD: number;
 }
 
 const requiredEnv = [
@@ -59,5 +60,6 @@ export const config: Config = {
   ETH_MAINNET_RPC: sanitize(process.env.ETH_MAINNET_RPC) || 'https://cloudflare-eth.com',
   SOLANA_MAINNET_RPC: sanitize(process.env.SOLANA_MAINNET_RPC) || 'https://api.mainnet-beta.solana.com',
   SUPABASE_URL: sanitize(process.env.SUPABASE_URL),
-  SUPABASE_KEY: sanitize(process.env.SUPABASE_KEY)
+  SUPABASE_KEY: sanitize(process.env.SUPABASE_KEY),
+  MIN_ALERT_USD: parseFloat(process.env.MIN_ALERT_USD || '1000000') // Defaults to 1,000,000 USD
 };

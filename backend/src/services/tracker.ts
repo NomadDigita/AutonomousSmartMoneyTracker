@@ -31,8 +31,6 @@ export class BlockchainTrackerService {
   ];
 
   private static readonly ERC20_TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
-
-  // Constant contract used to fetch real-time ETH price securely
   private static readonly WETH_CONTRACT = '0xC02aaA39b223FE8D0A0e5C4F27ead9083C756Cc2';
 
   public static async getProvider(): Promise<ethers.JsonRpcProvider> {
@@ -84,11 +82,10 @@ Write a concise, one-sentence retail narrative explaining this transaction.`;
 
       const blockTimestamp = block.timestamp * 1000;
 
-      // Fetch the real-time ETH price to calibrate dynamic USD thresholds
       const ethData = await DexScreenerService.getTokenData(this.WETH_CONTRACT);
       const ethPriceUsd = parseFloat(ethData?.priceUsd || '3100');
 
-      // PATH 1: Scan Native ETH Transactions (Filters strictly for transfers >= $1,000,000 USD)
+      // PATH 1: Scan Native ETH Transactions
       if (block.prefetchedTransactions) {
         for (const tx of block.prefetchedTransactions) {
           if (!tx.to || !tx.from) continue;
@@ -100,8 +97,8 @@ Write a concise, one-sentence retail narrative explaining this transaction.`;
           const valEth = parseFloat(ethers.formatEther(tx.value));
           const txValueUsd = valEth * ethPriceUsd;
 
-          // ENFORCE MILLION-DOLLAR GATEKEEPER LIMIT
-          if (txValueUsd >= 1000000) {
+          // Enforce dynamic configurable USD threshold
+          if (txValueUsd >= config.MIN_ALERT_USD) {
             const matched = matchedWallet || {
               address: tx.from,
               label: `Whale Wallet (${tx.from.substring(0, 6)}...${tx.from.substring(38)})`,
@@ -137,7 +134,7 @@ Write a concise, one-sentence retail narrative explaining this transaction.`;
         }
       }
 
-      // PATH 2: Scan ERC-20 Tokens (Filters strictly for transfers >= $1,000,000 USD)
+      // PATH 2: Scan ERC-20 Tokens
       const logs = await activeProvider.getLogs({
         fromBlock: blockNumber,
         toBlock: blockNumber,
@@ -164,12 +161,10 @@ Write a concise, one-sentence retail narrative explaining this transaction.`;
 
             const decimals = 18; 
             const formattedAmount = ethers.formatUnits(amountRaw, decimals);
-            
-            // Calculate dynamic real-time USD value of the ERC-20 token transfer
             const txValueUsd = parseFloat(formattedAmount) * parseFloat(tokenData.priceUsd || '0');
 
-            // ENFORCE MILLION-DOLLAR GATEKEEPER LIMIT ON ERC-20 CONTRACTS
-            if (txValueUsd >= 1000000) {
+            // Enforce dynamic configurable USD threshold on ERC-20 contracts
+            if (txValueUsd >= config.MIN_ALERT_USD) {
               const liveTx: LiveTransaction = {
                 hash: log.transactionHash,
                 from: fromAddress,

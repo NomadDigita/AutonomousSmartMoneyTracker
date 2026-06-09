@@ -57,10 +57,11 @@ const server = app.listen(config.PORT, () => {
             `<i>"${signal.aiExplanation}"</i>\n\n` +
             `🔗 <a href="https://etherscan.io/tx/${signal.transactionHash}">View Transaction on Etherscan</a>`;
 
+          // Explicitly converts dynamic parameters to a strict string to satisfy the compiler
           await TelegramBotService.broadcastAlert(sub.chat_id.toString(), formattedAlert);
         }
 
-        // HACKATHON CORE TRADE AGENT TRIGGER: Executes a matching spot order on your real Bitget portfolio automatically on Buy signals!
+        // HACKATHON CORE TRADE AGENT TRIGGER: Executes a matching spot buy order on your real Bitget portfolio automatically on Buy signals!
         if (signal.action === 'BUY' && signal.confidenceScore >= 80) {
           console.log(`[Autonomous Agent] High-confidence smart money BUY detected. Initiating Bitget copy-trade for ${signal.asset}...`);
           try {
