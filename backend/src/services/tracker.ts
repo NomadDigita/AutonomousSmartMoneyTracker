@@ -21,16 +21,19 @@ export class BlockchainTrackerService {
     'wss://eth.llamarpc.com'
   ];
 
-  // Updated watched wallets (Removed Wrapped Ether Contract utility to prevent 0 ETH spam)
   public static readonly WATCHED_WALLETS: TrackedWallet[] = [
     { address: '0x00000000219ab540356cBB839Cbe05303d7705Fa', label: 'Ethereum Deposit Contract', category: 'Institution' },
     { address: '0xAb5801a7D398351b8bE11C439e05C5B3259aec9B', label: 'Vitalik Buterin', category: 'Elite Trader', historicalWinRate: 88, averageRoi: 145 },
+    { address: '0xC02aaA39b223FE8D0A0e5C4F27ead9083C756Cc2', label: 'Wrapped Ether Contract', category: 'Institution' },
     { address: '0xBE0eB53F46cd790Cd13851d5EFf43D12404d33E8', label: 'Binance 8 Wallet', category: 'Institution', historicalWinRate: 75, averageRoi: 62 },
     { address: '0x53d6118667e54f0c707538290fa16e1e8dd489aa', label: 'Amber Group Wallet', category: 'Venture Capital', historicalWinRate: 72, averageRoi: 48 },
     { address: '0x6550cf605d8f6cc3e387bc6a4ca2b07ef94fe3d1', label: 'a16z Crypto', category: 'Venture Capital', historicalWinRate: 69, averageRoi: 95 }
   ];
 
   private static readonly ERC20_TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
+
+  // Constant contract used to fetch real-time ETH price securely
+  private static readonly WETH_CONTRACT = '0xC02aaA39b223FE8D0A0e5C4F27ead9083C756Cc2';
 
   public static async getProvider(): Promise<ethers.JsonRpcProvider> {
     if (this.provider) return this.provider;
@@ -48,9 +51,6 @@ export class BlockchainTrackerService {
     throw new Error('[Tracker] Critical Node Failure: All public HTTP RPC gateways are unreachable.');
   }
 
-  /**
-   * Only triggers Qwen completions for high-value on-chain movements
-   */
   private static async getSignalExplanation(
     tx: LiveTransaction,
     wallet: TrackedWallet,
@@ -84,7 +84,11 @@ Write a concise, one-sentence retail narrative explaining this transaction.`;
 
       const blockTimestamp = block.timestamp * 1000;
 
-      // Scan Native ETH
+      // Fetch the real-time ETH price to calibrate dynamic USD thresholds
+      const ethData = await DexScreenerService.getTokenData(this.WETH_CONTRACT);
+      const ethPriceUsd = parseFloat(ethData?.priceUsd || '3100');
+
+      // PATH 1: Scan Native ETH Transactions (Filters strictly for transfers >= $1,000,000 USD)
       if (block.prefetchedTransactions) {
         for (const tx of block.prefetchedTransactions) {
           if (!tx.to || !tx.from) continue;
@@ -94,9 +98,10 @@ Write a concise, one-sentence retail narrative explaining this transaction.`;
           );
 
           const valEth = parseFloat(ethers.formatEther(tx.value));
+          const txValueUsd = valEth * ethPriceUsd;
 
-          // Enforce 50 ETH Minimum Value Floor to prevent dust/0 ETH alert spamming
-          if (valEth >= 50) {
+          // ENFORCE MILLION-DOLLAR GATEKEEPER LIMIT
+          if (txValueUsd >= 1000000) {
             const matched = matchedWallet || {
               address: tx.from,
               label: `Whale Wallet (${tx.from.substring(0, 6)}...${tx.from.substring(38)})`,
@@ -132,7 +137,7 @@ Write a concise, one-sentence retail narrative explaining this transaction.`;
         }
       }
 
-      // Scan ERC-20
+      // PATH 2: Scan ERC-20 Tokens (Filters strictly for transfers >= $1,000,000 USD)
       const logs = await activeProvider.getLogs({
         fromBlock: blockNumber,
         toBlock: blockNumber,
@@ -159,35 +164,38 @@ Write a concise, one-sentence retail narrative explaining this transaction.`;
 
             const decimals = 18; 
             const formattedAmount = ethers.formatUnits(amountRaw, decimals);
+            
+            // Calculate dynamic real-time USD value of the ERC-20 token transfer
+            const txValueUsd = parseFloat(formattedAmount) * parseFloat(tokenData.priceUsd || '0');
 
-            // Enforce a strict valuation limit to prevent any ERC-20 dust spamming
-            if (parseFloat(formattedAmount) < 10) continue;
+            // ENFORCE MILLION-DOLLAR GATEKEEPER LIMIT ON ERC-20 CONTRACTS
+            if (txValueUsd >= 1000000) {
+              const liveTx: LiveTransaction = {
+                hash: log.transactionHash,
+                from: fromAddress,
+                to: toAddress,
+                valueEth: parseFloat(formattedAmount).toFixed(4),
+                blockNumber,
+                timestamp: blockTimestamp,
+                gasPriceGwei: '0'
+              };
 
-            const liveTx: LiveTransaction = {
-              hash: log.transactionHash,
-              from: fromAddress,
-              to: toAddress,
-              valueEth: parseFloat(formattedAmount).toFixed(4),
-              blockNumber,
-              timestamp: blockTimestamp,
-              gasPriceGwei: '0'
-            };
+              const explanation = await this.getSignalExplanation(liveTx, matchedWallet, tokenData.symbol);
 
-            const explanation = await this.getSignalExplanation(liveTx, matchedWallet, tokenData.symbol);
-
-            signals.push({
-              transactionHash: log.transactionHash,
-              walletLabel: matchedWallet.label,
-              walletCategory: matchedWallet.category,
-              action: toAddress.toLowerCase() === matchedWallet.address.toLowerCase() ? 'BUY' : 'SELL',
-              asset: tokenData.symbol,
-              amount: liveTx.valueEth,
-              confidenceScore: 80,
-              impactScore: 60,
-              riskScore: 35,
-              aiExplanation: explanation,
-              timestamp: liveTx.timestamp
-            });
+              signals.push({
+                transactionHash: log.transactionHash,
+                walletLabel: matchedWallet.label,
+                walletCategory: matchedWallet.category,
+                action: toAddress.toLowerCase() === matchedWallet.address.toLowerCase() ? 'BUY' : 'SELL',
+                asset: tokenData.symbol,
+                amount: liveTx.valueEth,
+                confidenceScore: 80,
+                impactScore: 60,
+                riskScore: 35,
+                aiExplanation: explanation,
+                timestamp: liveTx.timestamp
+              });
+            }
 
           } catch {
             // Absorb log errors
