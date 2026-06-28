@@ -9,6 +9,7 @@ import { TelegramBotService } from './services/telegram.js';
 import { BlockchainTrackerService } from './services/tracker.js';
 import { SignalStateManager } from './services/signalState.js';
 import { BitgetService } from './services/bitget.js';
+import { AutonomousResearchAgent } from './services/researchAgent.js';
 
 const app = express();
 
@@ -61,12 +62,11 @@ const server = app.listen(config.PORT, () => {
           await TelegramBotService.broadcastAlert(sub.chat_id.toString(), formattedAlert);
         }
 
-        // HACKATHON CORE TRADE AGENT TRIGGER: Executes a matching spot buy order on your real Bitget portfolio automatically on Buy signals!
+        // Executes a matching spot buy order on your real Bitget portfolio automatically on Buy signals
         if (signal.action === 'BUY' && signal.confidenceScore >= 80) {
           console.log(`[Autonomous Agent] High-confidence smart money BUY detected. Initiating Bitget copy-trade for ${signal.asset}...`);
           try {
-            // Automatically execute a spot purchase of the target asset on your real Bitget account
-            const tradeSize = '2.0'; // Target execution size (e.g. purchase 2.0 of the coin)
+            const tradeSize = '2.0'; 
             const orderResult = await BitgetService.placeSpotOrder(
               `${signal.asset}USDT`,
               'buy',
@@ -83,16 +83,41 @@ const server = app.listen(config.PORT, () => {
       }
     });
 
-    // 3. Real-Time Self-Ping Keep-Alive Loop: Fires every 5 minutes to prevent your new Render container from sleeping
+    // 3. Real-Time Self-Ping Keep-Alive Loop: Fires every 5 minutes to prevent your Render container from sleeping
     setInterval(async () => {
       try {
-        const selfUrl = 'https://autonomoussmartmoneytracker-qycg.onrender.com/health';
+        const selfUrl = 'https://autonomoussmartmoneytracker-qy8s.onrender.com/health';
         await axios.get(selfUrl);
         console.log('[Keep-Alive] Self-ping dispatched successfully to Render node.');
       } catch (err: any) {
         console.warn('[Keep-Alive Warning] Self-ping skipped:', err.message);
       }
-    }, 5 * 60 * 1000);
+    }, 10 * 60 * 1000);
+
+    // 4. 6-Hour Autonomous Research Scheduler: Runs every 6 hours to compile and broadcast the daily macro briefing
+    setInterval(async () => {
+      console.log('[Scheduler] Executing autonomous 6-hour research sweep...');
+      try {
+        const report = await AutonomousResearchAgent.executeAutonomousResearch();
+        if (report) {
+          const subscribers = await SignalStateManager.getSubscribers();
+          for (const sub of subscribers) {
+            if (!sub.chat_id) continue;
+            
+            const alertMessage = 
+              `🔮 <b>6-HOUR AUTONOMOUS SMART MONEY BRIEFING</b> 🔮\n\n` +
+              `<b>${report.title}</b>\n` +
+              `• Sentiment Rating: <code>${report.sentiment_rating}</code>\n\n` +
+              `${report.report_text}\n\n` +
+              `🔗 <a href="https://autonomous-smart-money-tracker.vercel.app/">Open Live Web Dashboard</a>`;
+            
+            await TelegramBotService.broadcastAlert(sub.chat_id.toString(), alertMessage);
+          }
+        }
+      } catch (err: any) {
+        console.error('[Scheduler Error] 6-hour autonomous sweep aborted:', err.message);
+      }
+    }, 6 * 60 * 60 * 1000); // 6 Hours in milliseconds (21,600,000 ms)
 
   } catch (err: any) {
     console.error('[Initialization Error]:', err.message);
