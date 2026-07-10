@@ -27,7 +27,7 @@
     "express": "^4.19.2",
     "helmet": "^7.1.0",
     "morgan": "^1.10.0",
-    "node-cron": "^3.0.3",
+    "node-cron": "^4.6.0",
     "telegraf": "^4.16.3"
   },
   "devDependencies": {
